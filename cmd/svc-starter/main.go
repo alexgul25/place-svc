@@ -1,15 +1,49 @@
 package main
 
-func main() {
+import (
+	"context"
+	"log/slog"
+	"os"
+	"os/signal"
+	"syscall"
 
-	// 0. Расписать proto контракты
-	// 1. Создать слой с моделями              +++
-	// 2. Расписать слой загрузки конфигурации +++
-	// 3. Написать lib/logger                  +++
-	// 4. Написать слой service                +++
-	// 5. Написать слой storage                +++
-	// 6. Написать слой grpc handlers          +++
-	// 7. Написать слой app
-	// 8. Собрать всё в main
-	// 9. Написать kafka producer
+	"github.com/alexgul25/place-svc/internal/app"
+	"github.com/alexgul25/place-svc/internal/config"
+	"github.com/alexgul25/place-svc/internal/lib/logger"
+)
+
+func main() {
+	appCtx, stop := signal.NotifyContext(context.Background(), syscall.SIGTERM, syscall.SIGINT)
+	defer stop()
+
+	cfg, err := config.LoadPlaceService()
+	if err != nil {
+		slog.Error("failed to load config files", slog.Any("error", err))
+		os.Exit(1)
+	}
+
+	log := logger.New(cfg.Env)
+
+	application, err := app.New(
+		log,
+		cfg.GRPCServer.Port,
+		cfg.Database.User,
+		cfg.Database.Password,
+		cfg.Database.Host,
+		cfg.Database.DbName,
+		cfg.Database.Port,
+	)
+	if err != nil {
+		slog.Error("failed to init app", slog.Any("error", err))
+		os.Exit(1)
+	}
+	defer application.CloseStorage()
+
+	go func() {
+		application.RunServer()
+	}()
+
+	<-appCtx.Done()
+
+	application.GracefulStop()
 }
