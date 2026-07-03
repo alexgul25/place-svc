@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"log/slog"
 
-	"github.com/alexgul25/wishlist-svc/internal/domain/models"
+	"github.com/alexgul25/place-svc/internal/domain/models"
 )
 
 type PlaceRepository interface {
