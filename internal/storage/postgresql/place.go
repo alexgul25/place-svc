@@ -20,7 +20,7 @@ func (ps *PlaceStorage) CreatePlace(ctx context.Context, userID, name, info stri
 	const op = "postgresql.PlaceStorage.CreatePlace"
 
 	query := `
-		INSERT INTO places (user_id, name, info, created_at)
+		INSERT INTO places (user_id, place_name, info, created_at)
 		VALUES ($1, $2, $3, NOW())
 		RETURNING id, created_at
 	`
@@ -39,7 +39,7 @@ func (ps *PlaceStorage) GetPlacesByUserID(ctx context.Context, userID string) ([
 	const op = "postgresql.PlaceStorage.GetPlaceByUserID"
 
 	query := `
-		SELECT id, name, info, created_at
+		SELECT id, place_name, info, created_at
 		FROM places
 		WHERE user_id = $1
 	`

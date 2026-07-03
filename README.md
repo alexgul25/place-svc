@@ -2,4 +2,4 @@
 
 Микросервис для проекта **Date Wishlist Hub**, отвечает за данные о местах, добавленных пользователем
 
-Стек: `Go`, `gRPC`, `PostgreSQL`, `Redis`
+Стек: `Go`, `gRPC`, `PostgreSQL`
