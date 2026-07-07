@@ -5,6 +5,7 @@ import (
 	"log/slog"
 
 	grpcapp "github.com/alexgul25/place-svc/internal/app/grpc"
+	"github.com/alexgul25/place-svc/internal/infrastructure/serializer"
 	placelogic "github.com/alexgul25/place-svc/internal/service/place"
 	"github.com/alexgul25/place-svc/internal/storage/postgresql"
 )
@@ -28,7 +29,9 @@ func New(
 		return nil, fmt.Errorf("failed to init storage: %w", err)
 	}
 
-	placeStorage := postgresql.NewPlaceStorage(storage.DB())
+	outboxStorage := postgresql.NewOutboxStorage(storage.DB(), serializer.JSONSerializer{})
+
+	placeStorage := postgresql.NewPlaceStorage(storage.DB(), outboxStorage)
 
 	placeLogic := placelogic.New(log, placeStorage)
 
