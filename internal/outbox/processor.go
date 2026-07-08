@@ -3,6 +3,7 @@ package outbox
 import (
 	"context"
 	"log/slog"
+	"sync"
 	"time"
 )
 
@@ -18,6 +19,8 @@ type ProcessorWithSyncProducer struct {
 	opTimeout      time.Duration
 	selectInterval time.Duration
 	selectSize     int
+	done           chan struct{}
+	startWG        *sync.WaitGroup
 }
 
 func NewProcessorWithSyncProducer(
@@ -35,23 +38,28 @@ func NewProcessorWithSyncProducer(
 		opTimeout:      opTimeout,
 		selectInterval: selectInterval,
 		selectSize:     selectSize,
+		done:           make(chan struct{}),
+		startWG:        &sync.WaitGroup{},
 	}
 }
 
-func (p *ProcessorWithSyncProducer) Start(ctx context.Context) {
+func (p *ProcessorWithSyncProducer) Start() {
 	const op = "ProcessorWithSyncProducer.Start"
+
+	p.log.Info("processor with sync producer is started", slog.String("source", op))
+
+	p.startWG.Add(1)
+	defer p.startWG.Done()
 
 	ticker := time.NewTicker(p.selectInterval)
 	defer ticker.Stop()
 
 	for {
 		select {
-		case <-ctx.Done():
-			p.log.InfoContext(ctx, "processor with sync producer shutdown")
-
+		case <-p.done:
 			return
 		case <-ticker.C:
-			selectCtx, selectCancel := context.WithTimeout(ctx, p.opTimeout)
+			selectCtx, selectCancel := context.WithTimeout(context.Background(), p.opTimeout)
 
 			records, err := p.repo.SelectPending(selectCtx, p.selectSize)
 			if err != nil {
@@ -60,7 +68,7 @@ func (p *ProcessorWithSyncProducer) Start(ctx context.Context) {
 			selectCancel()
 
 			for _, record := range records {
-				sendCtx, sendCancel := context.WithTimeout(ctx, p.opTimeout)
+				sendCtx, sendCancel := context.WithTimeout(context.Background(), p.opTimeout)
 
 				err := p.producer.SendMessage(sendCtx, record.Message.Topic, []byte(record.Message.Key), record.Message.Payload)
 				if err != nil {
@@ -70,7 +78,7 @@ func (p *ProcessorWithSyncProducer) Start(ctx context.Context) {
 						slog.String("source", op), slog.String("record_id", record.ID), slog.Any("error", err),
 					)
 				} else {
-					markCtx, markCancel := context.WithTimeout(ctx, p.opTimeout)
+					markCtx, markCancel := context.WithTimeout(context.Background(), p.opTimeout)
 
 					err := p.repo.MarkAsPublished(markCtx, record.ID)
 					if err != nil {
@@ -87,5 +95,19 @@ func (p *ProcessorWithSyncProducer) Start(ctx context.Context) {
 				sendCancel()
 			}
 		}
+	}
+}
+
+func (p *ProcessorWithSyncProducer) Shutdown() {
+	select {
+	case <-p.done:
+		return
+	default:
+		p.log.Info("processor with sync producer is shutting down")
+
+		close(p.done)
+		p.startWG.Wait()
+
+		p.log.Info("processor with sync producer is shutdowned successfully")
 	}
 }
