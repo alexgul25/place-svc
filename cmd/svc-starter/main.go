@@ -24,26 +24,15 @@ func main() {
 
 	log := logger.New(cfg.Env)
 
-	application, err := app.New(
-		log,
-		cfg.GRPCServer.Port,
-		cfg.Database.User,
-		cfg.Database.Password,
-		cfg.Database.Host,
-		cfg.Database.DbName,
-		cfg.Database.Port,
-	)
+	application, err := app.New(log, cfg)
 	if err != nil {
 		slog.Error("failed to init app", slog.Any("error", err))
 		os.Exit(1)
 	}
-	defer application.CloseStorage()
 
-	go func() {
-		application.RunServer()
-	}()
+	application.Run()
 
 	<-appCtx.Done()
 
-	application.GracefulStop()
+	application.GracefulShutdown()
 }

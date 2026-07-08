@@ -4,12 +4,16 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"time"
 
+	"github.com/google/uuid"
+
+	"github.com/alexgul25/place-svc/internal/domain/events"
 	"github.com/alexgul25/place-svc/internal/domain/models"
 )
 
 type PlaceRepository interface {
-	CreatePlace(ctx context.Context, userID string, name string, info string) (models.Place, error)
+	InsertPlaceWithOutbox(ctx context.Context, place models.Place, event events.PlaceCreated) error
 	GetPlacesByUserID(ctx context.Context, userID string) ([]models.Place, error)
 }
 
@@ -32,7 +36,23 @@ func (pl *PlaceLogic) AddPlace(ctx context.Context, userID, name, info string) (
 
 	log.Info("attemptong to add place")
 
-	place, err := pl.placeRepo.CreatePlace(ctx, userID, name, info)
+	place := models.Place{
+		ID:        uuid.NewString(),
+		UserID:    userID,
+		Name:      name,
+		Info:      info,
+		CreatedAt: time.Now().UTC(),
+	}
+
+	event := events.PlaceCreated{
+		PlaceID:   place.ID,
+		UserID:    place.UserID,
+		Name:      place.Name,
+		Info:      place.Info,
+		CreatedAt: place.CreatedAt,
+	}
+
+	err := pl.placeRepo.InsertPlaceWithOutbox(ctx, place, event)
 	if err != nil {
 		log.Error("failed to add place", slog.Any("error", err))
 
