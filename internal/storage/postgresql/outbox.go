@@ -20,7 +20,7 @@ func NewOutboxStorage(db *sql.DB, serializer outbox.EventSerializer) *OutboxStor
 func (os *OutboxStorage) InsertRecord(ctx context.Context, tx *sql.Tx, topic, key string, event any) error {
 	const op = "postgresql.OutboxStorage.InsertRecord"
 
-	payload, err := os.serializer.Serialize(event)
+	payload, err := os.serializer.Marshal(event)
 	if err != nil {
 		return fmt.Errorf("%s: %w", op, err)
 	}

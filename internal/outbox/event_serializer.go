@@ -1,5 +1,5 @@
 package outbox
 
 type EventSerializer interface {
-	Serialize(event any) ([]byte, error)
+	Marshal(event any) ([]byte, error)
 }
