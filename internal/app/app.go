@@ -1,6 +1,7 @@
 package app
 
 import (
+	"errors"
 	"fmt"
 	"io"
 	"log/slog"
@@ -12,6 +13,7 @@ import (
 	"github.com/alexgul25/place-svc/internal/outbox"
 	placelogic "github.com/alexgul25/place-svc/internal/service/place"
 	"github.com/alexgul25/place-svc/internal/storage/postgresql"
+	"github.com/alexgul25/place-svc/internal/storage/redis"
 )
 
 type App struct {
@@ -20,6 +22,7 @@ type App struct {
 	processor  *outbox.ProcessorWithSyncProducer
 	storage    io.Closer
 	producer   io.Closer
+	cache      io.Closer
 }
 
 func New(
@@ -54,9 +57,25 @@ func New(
 	)
 	log.Info("init outbox processor with sync producer")
 
+	placeCache, err := redis.NewPlaceCache(
+		cfg.RedisCache.Addr,
+		cfg.RedisCache.Password,
+		cfg.RedisCache.Username,
+		cfg.RedisCache.DB,
+		cfg.RedisCache.DialTimeout,
+		cfg.RedisCache.ReadTimeout,
+		cfg.RedisCache.WriteTimeout,
+		serializer.JSONSerializer{},
+		cfg.RedisCache.TTL,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("failed to init place cache: %w", err)
+	}
+	log.Info("init place cache")
+
 	placeStorage := postgresql.NewPlaceStorage(storage.DB(), outboxStorage)
 
-	placeLogic := placelogic.New(log, placeStorage)
+	placeLogic := placelogic.New(log, placeStorage, placeCache)
 
 	serverApp := grpcapp.New(log, placeLogic, cfg.GRPCServer.Port)
 	log.Info("init server app")
@@ -67,22 +86,16 @@ func New(
 		processor:  processor,
 		storage:    storage,
 		producer:   syncProducer,
+		cache:      placeCache,
 	}, nil
 }
 
 func (a *App) close() error {
-	err1 := a.producer.Close()
-	err2 := a.storage.Close()
-	switch {
-	case err1 != nil && err2 != nil:
-		return fmt.Errorf("%w and %w", err1, err2)
-	case err1 != nil && err2 == nil:
-		return fmt.Errorf("%w", err1)
-	case err1 == nil && err2 != nil:
-		return fmt.Errorf("%w", err2)
-	default:
-		return nil
-	}
+	return errors.Join(
+		a.cache.Close(),
+		a.producer.Close(),
+		a.storage.Close(),
+	)
 }
 
 func (a *App) Run() {

@@ -16,6 +16,7 @@ type Config struct {
 	GRPCServer      GRPCServerConfig
 	OutboxProcessor OutboxProcessorConfig
 	KafkaProducer   KafkaProducerConfig
+	RedisCache      RedisCacheConfig
 }
 
 type DatabaseConfig struct {
@@ -41,6 +42,17 @@ type KafkaProducerConfig struct {
 	BrokersRaw  string `envconfig:"KAFKA_PRODUCER_BROKERS"`
 	Brokers     []string
 	SendTimeout time.Duration `envconfig:"KAFKA_PRODUCER_SEND_TIMEOUT" env-default:"8s"`
+}
+
+type RedisCacheConfig struct {
+	Addr         string        `envconfig:"REDIS_CACHE_ADDR"`
+	Password     string        `envconfig:"REDIS_CACHE_PASSWORD"`
+	Username     string        `envconfig:"REDIS_CACHE_USERNAME"`
+	DB           int           `envconfig:"REDIS_CACHE_DB" env-default:"0"`
+	DialTimeout  time.Duration `envconfig:"REDIS_CACHE_DIAL_TIMEOUT" env-default:"5s"`
+	ReadTimeout  time.Duration `envconfig:"REDIS_CACHE_READ_TIMEOUT" env-default:"3s"`
+	WriteTimeout time.Duration `envconfig:"REDIS_CACHE_WRITE_TIMEOUT" env-default:"3s"`
+	TTL          time.Duration `envconfig:"REDIS_CACHE_TTL"`
 }
 
 func load() (*Config, error) {
@@ -87,6 +99,13 @@ func LoadPlaceService() (*Config, error) {
 	}
 	if cfg.KafkaProducer.BrokersRaw == "" {
 		return nil, fmt.Errorf("%s: env variable KAFKA_PRODUCER_BROKERS not set", op)
+	}
+
+	if cfg.RedisCache.Addr == "" {
+		return nil, fmt.Errorf("%s: env variable REDIS_CACHE_ADDR not set", op)
+	}
+	if cfg.RedisCache.TTL <= 0 {
+		return nil, fmt.Errorf("%s: env variable REDIS_CACHE_TTL not set", op)
 	}
 
 	cfg.KafkaProducer.Brokers = strings.Split(cfg.KafkaProducer.BrokersRaw, ",")
