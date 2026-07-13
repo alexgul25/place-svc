@@ -1,0 +1,5 @@
+blank_issues_enabled: false
+contact_links:
+  - name: 💬 Обсуждение архитектуры
+    url: https://github.com/alexgul25/date-wishlist-hub-deploy/discussions
+    about: Идеи общего плана лучше обсуждать здесь

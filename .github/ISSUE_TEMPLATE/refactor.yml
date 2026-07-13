@@ -1,0 +1,41 @@
+name: 🔧 Рефакторинг
+description: Улучшение структуры кода без изменения функциональности
+title: "[REFACTOR] "
+labels: ["refactor", "priority: medium"]
+assignees: []
+body:
+  - type: textarea
+    id: what
+    attributes:
+      label: Что именно требует рефакторинга?
+      description: Укажите модуль, файл или участок кода.
+    validations:
+      required: true
+  - type: textarea
+    id: why
+    attributes:
+      label: Почему это необходимо?
+      description: Например, высокая связанность, дублирование, сложность тестирования, плохая читаемость.
+    validations:
+      required: true
+  - type: textarea
+    id: solution
+    attributes:
+      label: Предлагаемое решение
+      description: Как должен выглядеть код после рефакторинга?
+    validations:
+      required: false
+  - type: textarea
+    id: risks
+    attributes:
+      label: Потенциальные риски
+      description: Что может сломаться? Какие тесты нужно обновить?
+    validations:
+      required: false
+  - type: textarea
+    id: related
+    attributes:
+      label: Связанные Issues/PR
+      description: Ссылки на связанные задачи, если есть.
+    validations:
+      required: false

@@ -1,0 +1,39 @@
+name: 📚 Документация
+description: Улучшение или создание документации
+title: "[DOCS] "
+labels: ["documentation", "priority: low"]
+assignees: []
+body:
+  - type: textarea
+    id: what
+    attributes:
+      label: Что нужно задокументировать?
+      description: Например, API эндпоинт, архитектурное решение, процесс развёртывания.
+    validations:
+      required: true
+  - type: dropdown
+    id: where
+    attributes:
+      label: Где должна быть документация?
+      multiple: true
+      options:
+        - README.md
+        - OpenAPI/Swagger
+        - Внутри кода (комментарии)
+        - Отдельный файл в docs/
+    validations:
+      required: true
+  - type: textarea
+    id: requirements
+    attributes:
+      label: Требования
+      description: Что будет считаться достаточной документацией?
+    validations:
+      required: false
+  - type: textarea
+    id: related
+    attributes:
+      label: Связанные задачи
+      description: Ссылки на Issues/PR, к которым относится документация.
+    validations:
+      required: false

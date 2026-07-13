@@ -1,0 +1,45 @@
+name: 🧪 Тестирование
+description: Добавление unit-, интеграционных или e2e-тестов
+title: "[TEST] "
+labels: ["testing", "priority: medium"]
+assignees: []
+body:
+  - type: textarea
+    id: what
+    attributes:
+      label: Что должно быть покрыто тестами?
+      description: Укажите модуль, функцию или эндпоинт.
+    validations:
+      required: true
+  - type: dropdown
+    id: test_type
+    attributes:
+      label: Тип тестов
+      multiple: true
+      options:
+        - Unit
+        - Интеграционные
+        - e2e
+    validations:
+      required: true
+  - type: textarea
+    id: current_coverage
+    attributes:
+      label: Текущее покрытие (если известно)
+      description: Есть ли уже тесты? Что именно отсутствует?
+    validations:
+      required: false
+  - type: textarea
+    id: requirements
+    attributes:
+      label: Требования
+      description: Что будет считаться достаточным покрытием (например, coverage > 80% для модуля, все критические сценарии покрыты).
+    validations:
+      required: false
+  - type: textarea
+    id: related
+    attributes:
+      label: Связанные Issues/PR
+      description: Ссылки на функциональность, которую тестируем.
+    validations:
+      required: false

@@ -1,0 +1,59 @@
+name: 🐛 Ошибка (или Баг)
+description: Что-то пошло не так
+title: "[BUG] "
+labels: ["bug", "priority: high"]
+assignees: []
+body:
+  - type: textarea
+    id: description
+    attributes:
+      label: Описание ошибки
+      description: Что произошло?
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Шаги для воспроизведения
+      description: Подробно опишите, как вызвать ошибку.
+      placeholder: |
+        1. Запустил '...'
+        2. Отправил запрос '...'
+        3. Получил ошибку '...'
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Ожидаемое поведение
+      description: Что должно было произойти?
+    validations:
+      required: false
+  - type: textarea
+    id: environment
+    attributes:
+      label: Окружение
+      description: Версия сервиса, ОС, Docker-образ и т.д.
+      placeholder: |
+        - ОС: Ubuntu 22.04
+        - Версия сервиса: 0.2.1
+        - Docker-образ: date-wishlist-hub/gateway:latest
+    validations:
+      required: false
+  - type: textarea
+    id: logs
+    attributes:
+      label: Логи и вывод ошибок
+      description: Вставьте сообщение об ошибке или фрагмент лога. Будет отформатирован как код.
+      render: shell
+    validations:
+      required: false
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Перед отправкой
+      options:
+        - label: Я проверил, что подобная ошибка ещё не зарегистрирована
+          required: true
+        - label: Я приложил логи и/или скриншоты, если возможно
+          required: false

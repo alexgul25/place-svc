@@ -1,0 +1,34 @@
+name: 💡 Идея
+description: Зафиксировать мысль для последующего обсуждения
+title: "[IDEA] "
+labels: ["idea", "priority: low"]
+assignees: []
+body:
+  - type: textarea
+    id: essence
+    attributes:
+      label: Суть идеи
+      description: Максимально коротко опишите мысль.
+    validations:
+      required: true
+  - type: textarea
+    id: problem
+    attributes:
+      label: Какую проблему решает
+      description: Зачем это может понадобиться пользователю или вам.
+    validations:
+      required: true
+  - type: textarea
+    id: draft
+    attributes:
+      label: Первые прикидки реализации
+      description: Если уже есть мысли по коду или архитектуре.
+    validations:
+      required: false
+  - type: textarea
+    id: related
+    attributes:
+      label: Связанные задачи
+      description: Ссылки на существующие Issues или PR, если имеются.
+    validations:
+      required: false
