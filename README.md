@@ -62,7 +62,7 @@
 
 :open_file_folder: **[./internal/domain](./internal/domain/)** - модели и события домена.
 
-:open_file_folder: **[./internal/grpc]** - **gRPC-хендлеры** и gRPC-интерсепторы.
+:open_file_folder: **[./internal/grpc](./internal/grpc/)** - **gRPC-хендлеры** и gRPC-интерсепторы.
 
 :open_file_folder: **[./internal/infrastructure](./internal/infrastructure/)** - конкретные реализации абстрактных сущностей (брокер сообщений, сериализатор), используемых для работы приложения.
 
