@@ -161,11 +161,11 @@ psql -h localhost -U <имя пользователя> -d <имя БД> -c "SELE
 
 ***ВАЖНО!*** Создайте в корневой папке репозитория файл `.env` для переменных окружения и заполните его (см [.env.example](.env.example)).
 
-Для переменных `DB_USER`, `DB_PASSWORD` и `DB_NAME` используйте значения из шага [3.1.](#31-postgresql).
+Для переменных `DB_USER`, `DB_PASSWORD` и `DB_NAME` используйте значения из шага [3.1.](#31-postgresql)
 
-Для переменной `KAFKA_PRODUCER_BROKERS` используйте значения из шага [3.2.](#32-kafka).
+Для переменной `KAFKA_PRODUCER_BROKERS` используйте значения из шага [3.2.](#32-kafka)
 
-Для переменных `REDIS_CACHE_ADDR`, `REDIS_CACHE_PASSWORD`, `REDIS_CACHE_USERNAME` используйте значения из шага [3.3.](#33-redis). Примечание: сервис будет корректно работать и при пустых значениях `REDIS_CACHE_PASSWORD` и `REDIS_CACHE_USERNAME`.
+Для переменных `REDIS_CACHE_ADDR`, `REDIS_CACHE_PASSWORD`, `REDIS_CACHE_USERNAME` используйте значения из шага [3.3.](#33-redis) Примечание: сервис будет корректно работать и при пустых значениях `REDIS_CACHE_PASSWORD` и `REDIS_CACHE_USERNAME`.
 
 ### 4. Запуск и работа
 
