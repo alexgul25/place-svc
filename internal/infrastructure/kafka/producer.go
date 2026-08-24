@@ -47,7 +47,7 @@ func (sp *SyncProducer) SendMessage(ctx context.Context, messageID string, topic
 		Value: sarama.ByteEncoder(value),
 		Headers: []sarama.RecordHeader{
 			{Key: []byte("source"), Value: sp.source},
-			{Key: []byte("record_id"), Value: []byte(messageID)},
+			{Key: []byte("message_id"), Value: []byte(messageID)},
 		},
 	}
 
