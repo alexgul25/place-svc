@@ -70,7 +70,7 @@ func (p *ProcessorWithSyncProducer) Start() {
 			for _, record := range records {
 				sendCtx, sendCancel := context.WithTimeout(context.Background(), p.opTimeout)
 
-				err := p.producer.SendMessage(sendCtx, record.Message.Topic, []byte(record.Message.Key), record.Message.Payload)
+				err := p.producer.SendMessage(sendCtx, record.ID, record.Message.Topic, []byte(record.Message.Key), record.Message.Payload)
 				if err != nil {
 					p.log.ErrorContext(
 						sendCtx,
