@@ -36,7 +36,7 @@ func NewSyncProducer(brokers []string, source string, timeout time.Duration) (*S
 	}, nil
 }
 
-func (sp *SyncProducer) SendMessage(ctx context.Context, topic string, key, value []byte) error {
+func (sp *SyncProducer) SendMessage(ctx context.Context, messageID string, topic string, key, value []byte) error {
 	if err := ctx.Err(); err != nil {
 		return err
 	}
@@ -47,6 +47,7 @@ func (sp *SyncProducer) SendMessage(ctx context.Context, topic string, key, valu
 		Value: sarama.ByteEncoder(value),
 		Headers: []sarama.RecordHeader{
 			{Key: []byte("source"), Value: sp.source},
+			{Key: []byte("message_id"), Value: []byte(messageID)},
 		},
 	}
 
