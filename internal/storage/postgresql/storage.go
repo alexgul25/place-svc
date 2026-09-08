@@ -31,6 +31,10 @@ func (s *Storage) DB() *sql.DB {
 	return s.db
 }
 
+func (s *Storage) Ping() error {
+	return s.db.Ping()
+}
+
 func (s *Storage) Close() error {
 	return s.db.Close()
 }

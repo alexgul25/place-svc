@@ -39,6 +39,11 @@ func New(
 		return nil, fmt.Errorf("failed to init storage: %w", err)
 	}
 
+	if err := storage.Ping(); err != nil {
+		storage.Close()
+		return nil, fmt.Errorf("failed to ping storage: %w", err)
+	}
+
 	outboxStorage := postgresql.NewOutboxStorage(storage.DB(), serializer.JSONSerializer{})
 
 	syncProducer, err := kafka.NewSyncProducer(cfg.KafkaProducer.Brokers, cfg.ServiceName, cfg.KafkaProducer.SendTimeout)
