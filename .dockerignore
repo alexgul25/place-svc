@@ -1,0 +1,18 @@
+# Секреты и локальные артефакты не должны попадать в образ
+.env
+.env.*
+!.env.example
+.user_id
+bin/
+
+# Служебное, для сборки не нужно
+.git
+.github
+.gitignore
+*.md
+LICENSE
+Makefile
+
+# Сами файлы Docker внутри образа тоже не нужны
+Dockerfile
+.dockerignore
