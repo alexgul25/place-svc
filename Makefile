@@ -13,7 +13,7 @@ MIGRATOR_CMD := ./cmd/migrator
 # Порт либо из .env, либо стандартное значение, без возможности переопределения
 override GRPCSERVER_PORT := $(shell grep -m1 '^GRPCSERVER_PORT=' .env 2>/dev/null | cut -d'=' -f2- | tr -d '\r' | xargs)
 ifeq ($(strip $(GRPCSERVER_PORT)),)
-override GRPCSERVER_PORT := 50051
+override GRPCSERVER_PORT := 50052
 endif
 
 GRPC_ADDR := localhost:$(GRPCSERVER_PORT)

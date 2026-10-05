@@ -11,7 +11,7 @@ import (
 
 type Config struct {
 	Env             string `envconfig:"ENV"`
-	ServiceName     string `envconfig:"SERVICE_NAME" env-default:"place-svc"`
+	ServiceName     string `envconfig:"SERVICE_NAME" default:"place-svc"`
 	Database        DatabaseConfig
 	GRPCServer      GRPCServerConfig
 	OutboxProcessor OutboxProcessorConfig
@@ -28,30 +28,30 @@ type DatabaseConfig struct {
 }
 
 type GRPCServerConfig struct {
-	Port            int           `envconfig:"GRPCSERVER_PORT" env-default:"50051"`
-	GracefulTimeout time.Duration `envconfig:"GRACEFUL_TIMEOUT" env-default:"10s"`
+	Port            int           `envconfig:"GRPCSERVER_PORT" default:"50052"`
+	GracefulTimeout time.Duration `envconfig:"GRACEFUL_TIMEOUT" default:"10s"`
 }
 
 type OutboxProcessorConfig struct {
-	OpTimeout      time.Duration `envconfig:"OUTBOX_PROCESSOR_OP_TIMEOUT" env-default:"5s"`
-	SelectInterval time.Duration `envconfig:"OUTBOX_PROCESSOR_SELECT_INTERVAL" env-default:"10s"`
-	SelectSize     int           `envconfig:"OUTBOX_PROCESSOR_SELECT_SIZE" env-default:"100"`
+	OpTimeout      time.Duration `envconfig:"OUTBOX_PROCESSOR_OP_TIMEOUT" default:"5s"`
+	SelectInterval time.Duration `envconfig:"OUTBOX_PROCESSOR_SELECT_INTERVAL" default:"10s"`
+	SelectSize     int           `envconfig:"OUTBOX_PROCESSOR_SELECT_SIZE" default:"100"`
 }
 
 type KafkaProducerConfig struct {
 	BrokersRaw  string `envconfig:"KAFKA_PRODUCER_BROKERS"`
 	Brokers     []string
-	SendTimeout time.Duration `envconfig:"KAFKA_PRODUCER_SEND_TIMEOUT" env-default:"8s"`
+	SendTimeout time.Duration `envconfig:"KAFKA_PRODUCER_SEND_TIMEOUT" default:"8s"`
 }
 
 type RedisCacheConfig struct {
 	Addr         string        `envconfig:"REDIS_CACHE_ADDR"`
 	Password     string        `envconfig:"REDIS_CACHE_PASSWORD"`
 	Username     string        `envconfig:"REDIS_CACHE_USERNAME"`
-	DB           int           `envconfig:"REDIS_CACHE_DB" env-default:"0"`
-	DialTimeout  time.Duration `envconfig:"REDIS_CACHE_DIAL_TIMEOUT" env-default:"5s"`
-	ReadTimeout  time.Duration `envconfig:"REDIS_CACHE_READ_TIMEOUT" env-default:"3s"`
-	WriteTimeout time.Duration `envconfig:"REDIS_CACHE_WRITE_TIMEOUT" env-default:"3s"`
+	DB           int           `envconfig:"REDIS_CACHE_DB" default:"0"`
+	DialTimeout  time.Duration `envconfig:"REDIS_CACHE_DIAL_TIMEOUT" default:"5s"`
+	ReadTimeout  time.Duration `envconfig:"REDIS_CACHE_READ_TIMEOUT" default:"3s"`
+	WriteTimeout time.Duration `envconfig:"REDIS_CACHE_WRITE_TIMEOUT" default:"3s"`
 	TTL          time.Duration `envconfig:"REDIS_CACHE_TTL"`
 }
 
