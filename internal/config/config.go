@@ -4,6 +4,9 @@ import (
 	"errors"
 	"fmt"
 	"io/fs"
+	"net"
+	"net/url"
+	"strconv"
 	"strings"
 	"time"
 
@@ -27,6 +30,16 @@ type DatabaseConfig struct {
 	DbName   string `envconfig:"DB_NAME"`
 	Host     string `envconfig:"DB_HOST"`
 	Port     int    `envconfig:"DB_PORT"`
+}
+
+func (c *DatabaseConfig) DSN() string {
+	u := url.URL{
+		Scheme: "postgres",
+		User:   url.UserPassword(c.User, c.Password),
+		Host:   net.JoinHostPort(c.Host, strconv.Itoa(c.Port)),
+		Path:   c.DbName,
+	}
+	return u.String()
 }
 
 type GRPCServerConfig struct {

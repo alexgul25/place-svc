@@ -1,7 +1,6 @@
 package main
 
 import (
-	"fmt"
 	"log/slog"
 	"os"
 
@@ -18,15 +17,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	connStr := fmt.Sprintf("postgres://%s:%s@%s:%d/%s?sslmode=disable",
-		cfg.Database.User,
-		cfg.Database.Password,
-		cfg.Database.Host,
-		cfg.Database.Port,
-		cfg.Database.DbName,
-	)
-
-	db, err := goose.OpenDBWithDriver("pgx", connStr)
+	db, err := goose.OpenDBWithDriver("pgx", cfg.Database.DSN())
 	if err != nil {
 		slog.Error("failed to open DB", slog.Any("error", err))
 		os.Exit(1)
