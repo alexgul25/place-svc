@@ -4,10 +4,13 @@ import (
 	"context"
 	"log/slog"
 
+	grpcmw "github.com/grpc-ecosystem/go-grpc-middleware/v2/interceptors"
 	"github.com/grpc-ecosystem/go-grpc-middleware/v2/interceptors/logging"
 	"github.com/grpc-ecosystem/go-grpc-middleware/v2/interceptors/recovery"
+	"github.com/grpc-ecosystem/go-grpc-middleware/v2/interceptors/selector"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
+	healthpb "google.golang.org/grpc/health/grpc_health_v1"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
 )
@@ -49,6 +52,10 @@ func interceptorLogger(log *slog.Logger) logging.Logger {
 	})
 }
 
+func notHealthCheck(_ context.Context, c grpcmw.CallMeta) bool {
+	return c.Service != healthpb.Health_ServiceDesc.ServiceName
+}
+
 func NewLoggingInterceptor(log *slog.Logger, headersToLog []string) grpc.UnaryServerInterceptor {
 	loggingOpts := []logging.Option{
 		logging.WithFieldsFromContext(func(ctx context.Context) logging.Fields {
@@ -68,7 +75,10 @@ func NewLoggingInterceptor(log *slog.Logger, headersToLog []string) grpc.UnarySe
 		}),
 	}
 
-	return logging.UnaryServerInterceptor(interceptorLogger(log), loggingOpts...)
+	return selector.UnaryServerInterceptor(
+		logging.UnaryServerInterceptor(interceptorLogger(log), loggingOpts...),
+		selector.MatchFunc(notHealthCheck),
+	)
 }
 
 func NewContextEnricherInterceptor(headersToEnrich []string) grpc.UnaryServerInterceptor {
