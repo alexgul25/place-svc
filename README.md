@@ -191,6 +191,7 @@ psql -h localhost -U <имя пользователя> -d <имя БД> -c "SELE
 - Если PostgreSQL, Kafka и Redis доступны контейнеру по сети (например, запущены в других контейнерах), вместо `--network host` опубликуйте порт сервера: `-p <порт>:<порт>`, где порт совпадает с `GRPCSERVER_PORT`, и укажите в `.env` сетевые адреса этих сервисов.
 - Если при сборке не удаётся скачать Go-модули (например, `proxy.golang.org` недоступен), передайте другой прокси через аргумент сборки: `docker build --build-arg GOPROXY=https://goproxy.io,direct -t place-svc .`
 - Чтобы запустить контейнер в фоне, замените `--rm` на `-d`. Логи сервиса можно посмотреть командой `docker logs -f place-svc`, остановить и удалить контейнер - командами `docker stop place-svc` и `docker rm place-svc`.
+- Проверить состояние запущенного сервиса можно командой `docker exec user-svc /bin/grpc_health_probe -addr=:<порт>`, где порт совпадает с `GRPCSERVER_PORT`. Сервис отвечает по стандартному протоколу gRPC Health Checking.
 </details>
 <!-- markdownlint-enable MD033 -->
 

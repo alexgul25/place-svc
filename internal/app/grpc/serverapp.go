@@ -5,15 +5,19 @@ import (
 	"log/slog"
 	"net"
 
+	"google.golang.org/grpc/health"
+	healthpb "google.golang.org/grpc/health/grpc_health_v1"
+
 	handlersgrpc "github.com/alexgul25/place-svc/internal/grpc/handlers"
 	"github.com/alexgul25/place-svc/internal/grpc/interceptors"
 	"google.golang.org/grpc"
 )
 
 type ServerApp struct {
-	log        *slog.Logger
-	gRPCServer *grpc.Server
-	port       int
+	log          *slog.Logger
+	gRPCServer   *grpc.Server
+	healthServer *health.Server
+	port         int
 }
 
 func New(log *slog.Logger, placeService handlersgrpc.PlaceService, port int) *ServerApp {
@@ -28,10 +32,14 @@ func New(log *slog.Logger, placeService handlersgrpc.PlaceService, port int) *Se
 
 	handlersgrpc.Register(gRPCServer, placeService)
 
+	healthServer := health.NewServer()
+	healthpb.RegisterHealthServer(gRPCServer, healthServer)
+
 	return &ServerApp{
-		log:        log,
-		gRPCServer: gRPCServer,
-		port:       port,
+		log:          log,
+		gRPCServer:   gRPCServer,
+		healthServer: healthServer,
+		port:         port,
 	}
 }
 
@@ -63,6 +71,7 @@ func (sa *ServerApp) GracefulStop() {
 
 	sa.log.With(slog.String("source", op)).Info("stopping place grpc server", slog.Int("port", sa.port))
 
+	sa.healthServer.Shutdown()
 	sa.gRPCServer.GracefulStop()
 
 	sa.log.Info("place grpc server gracefully stopped")
