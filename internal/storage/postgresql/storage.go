@@ -16,7 +16,7 @@ func NewStorage(dsn string) (*Storage, error) {
 
 	db, err := sql.Open("pgx", dsn)
 	if err != nil {
-		return nil, fmt.Errorf("%s: %w\n", op, err)
+		return nil, fmt.Errorf("%s: %w", op, err)
 	}
 
 	return &Storage{db}, nil

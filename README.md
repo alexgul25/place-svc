@@ -30,11 +30,13 @@
 <!-- markdownlint-disable MD033 -->
 <details>
 <summary>Примечания</summary>
+
 - Все запросы для **Place Service** должны передавать заголовок `x-service-name` - имя сервиса, вызывающего метод (Calling service).
 - Заполненный столбец `Auth` указывает:
     1. вызов метода инициирован пользователем;
     2. ✅ и ❌ - соответственно нужен или не нужен JWT-токен для успешного вызова.
 - Для методов, требующих идентификации через JWT-токен, необходимо передавать заголовок `x-user-id`.
+
 </details>
 <!-- markdownlint-enable MD033 -->
 
@@ -158,8 +160,10 @@ psql -h localhost -U <имя пользователя> -d <имя БД> -c "SELE
 <!-- markdownlint-disable MD033 -->
 <details>
 <summary>Особенности .env при запуске в Docker</summary>
+
 - Значения указывайте без кавычек: Docker передаёт их в контейнер как есть, вместе с кавычками.
 - `localhost` в `DB_HOST`, `KAFKA_PRODUCER_BROKERS` и `REDIS_CACHE_ADDR` внутри контейнера означает сам контейнер, а не вашу машину (см. подсказки к варианту запуска в Docker в [следующем шаге](#4-запуск-и-работа)).
+
 </details>
 <!-- markdownlint-enable MD033 -->
 
@@ -187,11 +191,13 @@ psql -h localhost -U <имя пользователя> -d <имя БД> -c "SELE
 <!-- markdownlint-disable MD033 -->
 <details>
 <summary>Подсказки</summary>
+
 - Флаг `--network host` запускает контейнер в сети вашей машины: `localhost` в `DB_HOST`, `KAFKA_PRODUCER_BROKERS` и `REDIS_CACHE_ADDR` указывает на локальные PostgreSQL, Kafka и Redis, а gRPC-сервер доступен на `localhost:<GRPCSERVER_PORT>`, поэтому команды Makefile для отправки запросов работают без изменений. Режим работает в Docker Engine на Linux (в том числе в WSL2).
 - Если PostgreSQL, Kafka и Redis доступны контейнеру по сети (например, запущены в других контейнерах), вместо `--network host` опубликуйте порт сервера: `-p <порт>:<порт>`, где порт совпадает с `GRPCSERVER_PORT`, и укажите в `.env` сетевые адреса этих сервисов.
 - Если при сборке не удаётся скачать Go-модули (например, `proxy.golang.org` недоступен), передайте другой прокси через аргумент сборки: `docker build --build-arg GOPROXY=https://goproxy.io,direct -t place-svc .`
 - Чтобы запустить контейнер в фоне, замените `--rm` на `-d`. Логи сервиса можно посмотреть командой `docker logs -f place-svc`, остановить и удалить контейнер - командами `docker stop place-svc` и `docker rm place-svc`.
-- Проверить состояние запущенного сервиса можно командой `docker exec user-svc /bin/grpc_health_probe -addr=:<порт>`, где порт совпадает с `GRPCSERVER_PORT`. Сервис отвечает по стандартному протоколу gRPC Health Checking.
+- Проверить состояние запущенного сервиса можно командой `docker exec place-svc /bin/grpc_health_probe -addr=:<порт>`, где порт совпадает с `GRPCSERVER_PORT`. Сервис отвечает по стандартному протоколу gRPC Health Checking.
+
 </details>
 <!-- markdownlint-enable MD033 -->
 
