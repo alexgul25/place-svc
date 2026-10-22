@@ -1,8 +1,10 @@
 # syntax=docker/dockerfile:1
 
 # Версия Go вынесена в аргумент, чтобы её было легко поменять
-# без правки остального файла: docker build --build-arg GO_VERSION=1.27 .
-ARG GO_VERSION=1.26
+# без правки остального файла: docker build --build-arg GO_VERSION=1.28 .
+# Меняется вместе с директивой go в go.mod: в официальных образах Go
+# стоит GOTOOLCHAIN=local, и более старый Go не соберёт модуль.
+ARG GO_VERSION=1.27
 # Версия утилиты grpc_health_probe для проверки состояния сервиса
 ARG GRPC_HEALTH_PROBE_VERSION=v0.4.38
 
