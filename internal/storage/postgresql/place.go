@@ -48,7 +48,9 @@ func (ps *PlaceStorage) InsertPlaceWithOutbox(ctx context.Context, place models.
 	if err != nil {
 		return fmt.Errorf("%s: %w", op, err)
 	}
-	defer tx.Rollback()
+	// После Commit откат ничего не делает и возвращает sql.ErrTxDone, а при ошибке
+	// до Commit наружу уходит исходная ошибка, поэтому ошибка отката не нужна.
+	defer func() { _ = tx.Rollback() }()
 
 	query := `
 		INSERT INTO places (id, user_id, place_name, info, created_at)
