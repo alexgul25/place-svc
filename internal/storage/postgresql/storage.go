@@ -1,6 +1,7 @@
 package postgresql
 
 import (
+	"context"
 	"database/sql"
 	"fmt"
 
@@ -26,8 +27,9 @@ func (s *Storage) DB() *sql.DB {
 	return s.db
 }
 
-func (s *Storage) Ping() error {
-	return s.db.Ping()
+// Ping проверяет соединение с БД. Проверка прерывается, когда отменяется ctx.
+func (s *Storage) Ping(ctx context.Context) error {
+	return s.db.PingContext(ctx)
 }
 
 func (s *Storage) Close() error {

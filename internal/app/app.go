@@ -1,6 +1,7 @@
 package app
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"io"
@@ -25,7 +26,10 @@ type App struct {
 	cache      io.Closer
 }
 
+// New собирает приложение и проверяет соединение с БД. Если ctx отменяется
+// во время проверки (например, по SIGTERM), New возвращает ошибку.
 func New(
+	ctx context.Context,
 	log *slog.Logger,
 	cfg *config.Config,
 ) (*App, error) {
@@ -34,7 +38,7 @@ func New(
 		return nil, fmt.Errorf("failed to init storage: %w", err)
 	}
 
-	if err := storage.Ping(); err != nil {
+	if err := storage.Ping(ctx); err != nil {
 		storage.Close()
 		return nil, fmt.Errorf("failed to ping storage: %w", err)
 	}

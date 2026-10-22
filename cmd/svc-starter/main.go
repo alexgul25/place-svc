@@ -24,7 +24,7 @@ func main() {
 
 	log := logger.New(cfg.Env)
 
-	application, err := app.New(log, cfg)
+	application, err := app.New(appCtx, log, cfg)
 	if err != nil {
 		slog.Error("failed to init app", slog.Any("error", err))
 		os.Exit(1)
