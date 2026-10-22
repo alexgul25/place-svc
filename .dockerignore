@@ -4,6 +4,7 @@
 !.env.example
 .user_id
 bin/
+coverage.*
 
 # Служебное, для сборки не нужно
 .git

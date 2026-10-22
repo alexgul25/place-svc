@@ -26,13 +26,17 @@ PUBLIC_SERVICE_NAME ?= gateway-svc
 SERVICE_HEADER_NAME := x-service-name
 USER_HEADER_NAME := x-user-id
 
+COVER_PROFILE := coverage.out
+COVER_HTML := coverage.html
+
 USER_FILE := .user_id
 override USER_ID = $(shell cat $(USER_FILE) 2>/dev/null | tr -d '\r\n')
 
 .PHONY: help protoset build migrate run run-only \
 		set-user add-place my-places places \
-		clean clean-id clean-bin print-config \
-		_check_tools _check_protoset _check_user
+		clean clean-id clean-bin clean-cover print-config \
+		_check_tools _check_protoset _check_user _check_lint \
+		test test-cover lint fmt tidy-check vulncheck ci
 
 help: ## Показать список доступных команд
 	@awk 'BEGIN {FS = ":.*##"} /^[a-zA-Z0-9_-]+:.*##/ {printf "  \033[36m%-18s\033[0m %s\n", $$1, $$2}' $(MAKEFILE_LIST)
@@ -54,6 +58,29 @@ build: ## Собрать бинарник сервиса
 	@mkdir -p "$(BIN_DIR)"
 	@go build -o "$(BINARY)" $(SERVER_CMD)
 	@echo "✅  Собран $(BINARY)"
+
+test: ## Запустить тесты с детектором гонок
+	@go test -race ./...
+
+test-cover: ## Запустить тесты и собрать отчёт о покрытии
+	@go test -race -covermode=atomic -coverpkg=./... -coverprofile="$(COVER_PROFILE)" ./...
+	@go tool cover -html="$(COVER_PROFILE)" -o "$(COVER_HTML)"
+	@echo "📊  Покрытие: $$(go tool cover -func="$(COVER_PROFILE)" | awk '/^total:/ {print $$3}'), отчёт: $(COVER_HTML)"
+
+lint: _check_lint ## Запустить линтеры (как в CI)
+	@golangci-lint run ./...
+
+fmt: _check_lint ## Отформатировать код
+	@golangci-lint fmt ./...
+
+tidy-check: ## Проверить, что go.mod и go.sum приведены в порядок
+	@go mod tidy -diff
+
+vulncheck: ## Проверить код на известные уязвимости
+	@go run golang.org/x/vuln/cmd/govulncheck@latest ./...
+
+ci: tidy-check lint vulncheck test ## Запустить все проверки CI локально
+	@echo "✅  Все проверки пройдены"
 
 run: migrate build ## Применить миграции, собрать бинарник и запустить сервис
 	@echo "🚀  Запуск $(SERVICE_NAME)..."
@@ -125,13 +152,16 @@ places: _check_tools _check_protoset _check_user ## Список мест пол
 		exit 1; \
 	fi
 
-clean: clean-id clean-bin ## Очистить локальные артефакты и ID
+clean: clean-id clean-bin clean-cover ## Очистить локальные артефакты и ID
 clean-id: ## Удалить файл с сохранённым ID пользователя
 	@rm -f "$(USER_FILE)"
 	@echo "🧹  Файл $(USER_FILE) удалён"
 clean-bin: ## Удалить собранные бинарники
 	@rm -rf "$(BIN_DIR)"
 	@echo "🧹  Директория $(BIN_DIR) удалена"
+clean-cover: ## Удалить отчёты о покрытии
+	@rm -f "$(COVER_PROFILE)" "$(COVER_HTML)"
+	@echo "🧹  Отчёты о покрытии удалены"
 
 print-config: ## Показать текущую конфигурацию
 	@echo "SERVICE_NAME        = $(SERVICE_NAME)"
@@ -145,6 +175,9 @@ print-config: ## Показать текущую конфигурацию
 _check_tools:
 	@command -v grpcurl >/dev/null 2>&1 || { echo "❌  grpcurl не найден. Установите grpcurl."; exit 1; }
 	@command -v jq >/dev/null 2>&1 || { echo "❌  jq не найден. Установите jq."; exit 1; }
+
+_check_lint:
+	@command -v golangci-lint >/dev/null 2>&1 || { echo "❌  golangci-lint не найден. Установите golangci-lint (см. README)."; exit 1; }
 
 _check_protoset:
 	@test -f "$(PROTOSET)" || { echo "❌  Protoset не найден: $(PROTOSET). Выполните make protoset."; exit 1; }
