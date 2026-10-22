@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"log/slog"
 	"os"
 	"os/signal"
@@ -13,21 +14,26 @@ import (
 )
 
 func main() {
+	if err := run(); err != nil {
+		slog.Error("service failed", slog.Any("error", err))
+		os.Exit(1)
+	}
+}
+
+func run() error {
 	appCtx, stop := signal.NotifyContext(context.Background(), syscall.SIGTERM, syscall.SIGINT)
 	defer stop()
 
 	cfg, err := config.LoadPlaceService()
 	if err != nil {
-		slog.Error("failed to load config files", slog.Any("error", err))
-		os.Exit(1)
+		return fmt.Errorf("failed to load config: %w", err)
 	}
 
 	log := logger.New(cfg.Env)
 
-	application, err := app.New(log, cfg)
+	application, err := app.New(appCtx, log, cfg)
 	if err != nil {
-		slog.Error("failed to init app", slog.Any("error", err))
-		os.Exit(1)
+		return fmt.Errorf("failed to init app: %w", err)
 	}
 
 	application.Run()
@@ -35,4 +41,6 @@ func main() {
 	<-appCtx.Done()
 
 	application.GracefulShutdown()
+
+	return nil
 }

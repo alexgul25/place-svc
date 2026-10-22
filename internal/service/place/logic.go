@@ -2,6 +2,7 @@ package placelogic
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 	"time"
@@ -92,11 +93,12 @@ func (pl *PlaceLogic) GetUserPlaces(ctx context.Context, userID string) ([]model
 	log.Info("attempting to get user places from cache")
 
 	places, err := pl.cache.Get(ctx, userID)
-	if err == domain.ErrCacheMiss {
+	switch {
+	case errors.Is(err, domain.ErrCacheMiss):
 		log.Info("cache miss")
-	} else if err != nil {
+	case err != nil:
 		log.Error("failed to get user places from cache", slog.Any("error", err))
-	} else {
+	default:
 		log.Info("get user places from cache successfully")
 
 		return places, nil

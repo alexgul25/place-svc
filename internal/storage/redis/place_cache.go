@@ -2,6 +2,7 @@ package redis
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
 
@@ -56,7 +57,7 @@ func (pc *PlaceCache) Get(ctx context.Context, userID string) ([]models.Place, e
 	const op = "redis.PlaceCache.Get"
 
 	strPlaces, err := pc.client.Get(ctx, cache.ToKeyUserPlaces(userID)).Result()
-	if err == goredis.Nil {
+	if errors.Is(err, goredis.Nil) {
 		return nil, domain.ErrCacheMiss
 	} else if err != nil {
 		return nil, fmt.Errorf("%s: %w", op, err)

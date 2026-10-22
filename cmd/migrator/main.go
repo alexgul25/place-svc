@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"log/slog"
 	"os"
 
@@ -11,24 +12,30 @@ import (
 )
 
 func main() {
+	if err := run(); err != nil {
+		slog.Error("migrator failed", slog.Any("error", err))
+		os.Exit(1)
+	}
+
+	slog.Info("migrations applied successfully")
+}
+
+func run() error {
 	cfg, err := config.LoadPlaceService()
 	if err != nil {
-		slog.Error("failed to load config files", slog.Any("error", err))
-		os.Exit(1)
+		return fmt.Errorf("failed to load config: %w", err)
 	}
 
 	db, err := goose.OpenDBWithDriver("pgx", cfg.Database.DSN())
 	if err != nil {
-		slog.Error("failed to open DB", slog.Any("error", err))
-		os.Exit(1)
+		return fmt.Errorf("failed to open DB: %w", err)
 	}
 	defer db.Close()
 
 	pathToMigrations := "./migrations"
 	if err := goose.Up(db, pathToMigrations); err != nil {
-		slog.Error("failed to up migrations", slog.Any("error", err))
-		os.Exit(1)
+		return fmt.Errorf("failed to up migrations: %w", err)
 	}
 
-	slog.Info("migrations applied successfully")
+	return nil
 }
