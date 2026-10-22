@@ -1,16 +1,17 @@
 package grpcapp
 
 import (
+	"context"
 	"fmt"
 	"log/slog"
 	"net"
 
+	"google.golang.org/grpc"
 	"google.golang.org/grpc/health"
 	healthpb "google.golang.org/grpc/health/grpc_health_v1"
 
 	handlersgrpc "github.com/alexgul25/place-svc/internal/grpc/handlers"
 	"github.com/alexgul25/place-svc/internal/grpc/interceptors"
-	"google.golang.org/grpc"
 )
 
 type ServerApp struct {
@@ -46,7 +47,8 @@ func New(log *slog.Logger, placeService handlersgrpc.PlaceService, port int) *Se
 func (sa *ServerApp) Run() error {
 	const op = "ServerApp.Run"
 
-	l, err := net.Listen("tcp", fmt.Sprintf(":%d", sa.port))
+	var lc net.ListenConfig
+	l, err := lc.Listen(context.Background(), "tcp", fmt.Sprintf(":%d", sa.port))
 	if err != nil {
 		return fmt.Errorf("%s: %w", op, err)
 	}
