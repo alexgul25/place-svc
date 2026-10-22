@@ -1,0 +1,54 @@
+# Конфигурация golangci-lint v2: https://golangci-lint.run/docs/configuration/file/
+version: "2"
+
+run:
+  timeout: 5m
+  # Интеграционные тесты помечены build-тегом: без него линтер их не проверяет.
+  build-tags:
+    - integration
+
+linters:
+  # Базовый набор: errcheck, govet, ineffassign, staticcheck, unused.
+  default: standard
+  enable:
+    - errname # сигнальные ошибки называются ErrXxx
+    - errorlint # ошибки сравниваются через errors.Is/As, а не через ==
+    - gocritic # типовые ошибки и неочевидные конструкции (например, os.Exit после defer)
+    - gosec # типовые проблемы безопасности
+    - misspell # опечатки в английских словах в комментариях и строках
+    - nilerr # возврат nil вместо проверенной ошибки
+    - noctx # сетевые вызовы и запросы к БД принимают context
+    - nolintlint # директивы //nolint с указанием линтера и причины
+    - rowserrcheck # после обхода sql.Rows проверяется rows.Err()
+    - sqlclosecheck # sql.Rows и sql.Stmt закрываются
+    - thelper # вспомогательные функции тестов вызывают t.Helper()
+    - unconvert # лишние преобразования типов
+    - unparam # параметры функций, которые всегда получают одно значение
+    - usestdlibvars # константы стандартной библиотеки вместо "магических" значений
+  settings:
+    gosec:
+      excludes:
+        # G104 (необработанная ошибка) дублирует errcheck.
+        - G104
+  exclusions:
+    presets:
+      # Не требовать проверки ошибок у Close, Flush, fmt.Print* и т.п. в defer.
+      - std-error-handling
+    rules:
+      # В тестах gosec срабатывает на ожидаемое:
+      # G101 (пароль в коде) - на тестовые данные: пароли, секреты, DSN;
+      # G204 (запуск процесса с переменными) - на сборку и запуск бинарников в E2E-тестах.
+      - path: _test\.go
+        linters:
+          - gosec
+        text: G101|G204
+
+formatters:
+  enable:
+    - gofmt
+    - goimports
+  settings:
+    goimports:
+      # Импорты github.com/alexgul25/... (protos и сам сервис) - последней группой.
+      local-prefixes:
+        - github.com/alexgul25
