@@ -1,5 +1,7 @@
 # :round_pushpin: Place Service
 
+[![CI](https://github.com/alexgul25/place-svc/actions/workflows/ci.yml/badge.svg)](https://github.com/alexgul25/place-svc/actions/workflows/ci.yml)
+
 Микросервис для проекта **Date Wishlist Hub**.
 
 Ссылка на центральный репозиторий проекта: **[Date Wishlist Hub Deploy](https://github.com/alexgul25/date-wishlist-hub-deploy)**
@@ -84,6 +86,8 @@
 - компилятор Protocol Buffers (`protoc`);
 - утилита `grpcurl`;
 - утилита `jq`;
+- компилятор `gcc` (пакет `build-essential`) - для тестов с детектором гонок;
+- утилита `golangci-lint` (v2) - для проверки кода;
 - утилита `make`.
 
 ### 2. Клонирование нужных репозиториев
@@ -207,4 +211,11 @@ psql -h localhost -U <имя пользователя> -d <имя БД> -c "SELE
 
 - `make set-user` - установить ID конкретного пользователя. **Обязательная вспомогательная команда** для моделирования реальных запросов.
 - `make add-place`, `make my-places` и `make places` - вызывайте gRPC-методы.
-- `make clean` - выполните, чтобы удалить сохранённый ID пользователя.
+- `make clean` - выполните, чтобы удалить сохранённые бинарник, ID пользователя и отчёты о покрытии.
+
+#### Проверка кода
+
+- `make test` - запустите тесты с детектором гонок.
+- `make test-cover` - соберите отчёт о покрытии (`coverage.html`).
+- `make lint` - запустите линтеры.
+- `make ci` - запустите все проверки CI локально.
