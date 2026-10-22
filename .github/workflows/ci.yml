@@ -1,0 +1,109 @@
+# CI для Place Service: линтеры, поиск уязвимостей и unit-тесты.
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  # Ручной запуск из вкладки Actions.
+  workflow_dispatch:
+  # Еженедельный прогон: новые уязвимости публикуются и без изменений в коде.
+  schedule:
+    - cron: "0 5 * * 1" # понедельник, 08:00 МСК
+
+# GITHUB_TOKEN получает только право читать код.
+permissions:
+  contents: read
+
+# Новый пуш в PR отменяет устаревший прогон; прогоны в main не отменяются.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  lint:
+    name: Lint
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+
+      # Версия Go берётся из директивы go в go.mod, кэш модулей - по go.sum.
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+          cache-dependency-path: go.sum
+
+      # Падает, если go.mod или go.sum не приведены в порядок через go mod tidy.
+      - name: Check go.mod and go.sum are tidy
+        run: go mod tidy -diff
+
+      # Набор линтеров и форматтеров описан в .golangci.yml (go vet входит в него).
+      - name: golangci-lint
+        uses: golangci/golangci-lint-action@v9
+        with:
+          version: v2.14
+
+  vulncheck:
+    name: Vulnerabilities
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+          cache-dependency-path: go.sum
+
+      # Ищет известные уязвимости в зависимостях и стандартной библиотеке
+      # и сообщает только о тех, до которых реально доходит код сервиса.
+      - name: govulncheck
+        run: go run golang.org/x/vuln/cmd/govulncheck@latest ./...
+
+  test:
+    name: Unit tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+          cache-dependency-path: go.sum
+
+      # Отдельная проверка, что собираются все пакеты, включая оба бинарника из cmd/.
+      - name: Build
+        run: go build ./...
+
+      # -race ловит гонки данных; -coverpkg=./... считает покрытие по всем пакетам,
+      # включая те, где тестов пока нет, поэтому итоговый процент честный.
+      - name: Test
+        run: go test -race -covermode=atomic -coverpkg=./... -coverprofile=coverage.out ./...
+
+      # Итог покрытия попадает на страницу прогона (Summary), HTML-отчёт - в артефакт.
+      - name: Coverage report
+        run: |
+          go tool cover -html=coverage.out -o coverage.html
+          total=$(go tool cover -func=coverage.out | awk '/^total:/ {print $3}')
+          {
+            echo "### Покрытие тестами: ${total}"
+            echo
+            echo "<details><summary>Покрытие по функциям</summary>"
+            echo
+            echo '```'
+            go tool cover -func=coverage.out
+            echo '```'
+            echo
+            echo "</details>"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload coverage
+        uses: actions/upload-artifact@v7
+        with:
+          name: coverage
+          path: |
+            coverage.out
+            coverage.html
+          retention-days: 14
