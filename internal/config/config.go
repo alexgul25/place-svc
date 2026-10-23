@@ -97,6 +97,7 @@ func LoadPlaceService() (*Config, error) {
 	if cfg.Env == "" {
 		return nil, fmt.Errorf("%s: env variable ENV not set", op)
 	}
+
 	if cfg.Database.User == "" {
 		return nil, fmt.Errorf("%s: env variable DB_USER not set", op)
 	}
@@ -112,7 +113,9 @@ func LoadPlaceService() (*Config, error) {
 	if cfg.Database.Port == 0 {
 		return nil, fmt.Errorf("%s: env variable DB_PORT not set", op)
 	}
-	if cfg.KafkaProducer.BrokersRaw == "" {
+
+	cfg.KafkaProducer.Brokers = splitList(cfg.KafkaProducer.BrokersRaw)
+	if len(cfg.KafkaProducer.Brokers) == 0 {
 		return nil, fmt.Errorf("%s: env variable KAFKA_PRODUCER_BROKERS not set", op)
 	}
 
@@ -123,7 +126,18 @@ func LoadPlaceService() (*Config, error) {
 		return nil, fmt.Errorf("%s: env variable REDIS_CACHE_TTL not set", op)
 	}
 
-	cfg.KafkaProducer.Brokers = strings.Split(cfg.KafkaProducer.BrokersRaw, ",")
-
 	return cfg, nil
+}
+
+// splitList разбирает список через запятую: обрезает пробелы вокруг элементов
+// и пропускает пустые элементы
+// "a, b," ---> [a b]
+func splitList(raw string) []string {
+	var items []string
+	for item := range strings.SplitSeq(raw, ",") {
+		if item = strings.TrimSpace(item); item != "" {
+			items = append(items, item)
+		}
+	}
+	return items
 }
