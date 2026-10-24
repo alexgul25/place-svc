@@ -9,7 +9,6 @@ import (
 	"google.golang.org/protobuf/types/known/timestamppb"
 
 	"github.com/alexgul25/place-svc/internal/domain/models"
-	"github.com/alexgul25/place-svc/internal/grpc/interceptors"
 	placev1 "github.com/alexgul25/protos/gen/go/place/v1"
 )
 
@@ -28,16 +27,15 @@ func Register(gRPCServer *grpc.Server, placeServer PlaceService) {
 }
 
 func (s *serverAPI) AddPlace(ctx context.Context, in *placev1.AddPlaceRequest) (*placev1.AddPlaceResponse, error) {
+	userID, err := requireUserID(ctx)
+	if err != nil {
+		return nil, err
+	}
 	if err := validateText("name", in.GetName(), true, maxNameLength); err != nil {
 		return nil, err
 	}
 	if err := validateText("info", in.GetInfo(), false, maxInfoLength); err != nil {
 		return nil, err
-	}
-
-	userID, ok := interceptors.GetUserIDFromContext(ctx)
-	if !ok {
-		return nil, status.Error(codes.Unauthenticated, "user id is required")
 	}
 
 	place, err := s.placeService.AddPlace(ctx, userID, in.GetName(), in.GetInfo())
@@ -54,12 +52,18 @@ func (s *serverAPI) AddPlace(ctx context.Context, in *placev1.AddPlaceRequest) (
 	}, nil
 }
 
+// GetUserPlaces возвращает места любого пользователя, но только аутентифицированному вызову:
+// Gateway передаёт x-user-id того, кто смотрит список.
 func (s *serverAPI) GetUserPlaces(ctx context.Context, in *placev1.GetUserPlacesRequest) (*placev1.GetUserPlacesResponse, error) {
-	if in.GetUserId() == "" {
-		return nil, status.Error(codes.InvalidArgument, "user id is required")
+	if _, err := requireUserID(ctx); err != nil {
+		return nil, err
+	}
+	userID, err := validateID("user id", in.GetUserId())
+	if err != nil {
+		return nil, err
 	}
 
-	places, err := s.placeService.GetUserPlaces(ctx, in.GetUserId())
+	places, err := s.placeService.GetUserPlaces(ctx, userID)
 	if err != nil {
 		return nil, status.Error(codes.Internal, "failed to get user places")
 	}
