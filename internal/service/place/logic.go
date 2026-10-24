@@ -45,12 +45,16 @@ func (pl *PlaceLogic) AddPlace(ctx context.Context, userID, name, info string) (
 
 	log.Info("attempting to add place to storage")
 
+	// PostgreSQL хранит время с точностью до микросекунд, а pgx отбрасывает остаток.
+	// Без обрезки ответ и событие показывали бы другое время, чем список мест.
+	createdAt := time.Now().UTC().Truncate(time.Microsecond)
+
 	place := models.Place{
 		ID:        uuid.NewString(),
 		UserID:    userID,
 		Name:      name,
 		Info:      info,
-		CreatedAt: time.Now().UTC(),
+		CreatedAt: createdAt,
 	}
 
 	event := events.PlaceCreated{
