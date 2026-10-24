@@ -36,11 +36,23 @@ func run() error {
 		return fmt.Errorf("failed to init app: %w", err)
 	}
 
-	application.Run()
+	serverErr := make(chan error, 1)
+	go func() {
+		serverErr <- application.Run()
+	}()
 
-	<-appCtx.Done()
+	var runErr error
+	select {
+	case err := <-serverErr:
+		// Сервер не запустился (например, порт занят) или аварийно остановился.
+		runErr = fmt.Errorf("grpc server: %w", err)
+	case <-appCtx.Done():
+	}
 
-	application.GracefulShutdown()
+	// Outbox-процессор и соединения останавливаются и тогда, когда сервер не запустился.
+	stopCtx, cancel := context.WithTimeout(context.Background(), cfg.GRPCServer.GracefulTimeout)
+	defer cancel()
+	application.GracefulShutdown(stopCtx)
 
-	return nil
+	return runErr
 }
