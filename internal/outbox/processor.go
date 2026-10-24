@@ -19,8 +19,12 @@ type ProcessorWithSyncProducer struct {
 	opTimeout      time.Duration
 	selectInterval time.Duration
 	selectSize     int
-	done           chan struct{}
-	startWG        *sync.WaitGroup
+
+	mu       sync.Mutex
+	started  bool
+	stopping bool
+	done     chan struct{} // закрывается в Shutdown: обработку пора остановить
+	stopped  chan struct{} // закрывается, когда Start вернулся
 }
 
 func NewProcessorWithSyncProducer(
@@ -39,17 +43,27 @@ func NewProcessorWithSyncProducer(
 		selectInterval: selectInterval,
 		selectSize:     selectSize,
 		done:           make(chan struct{}),
-		startWG:        &sync.WaitGroup{},
+		stopped:        make(chan struct{}),
 	}
 }
 
+// Start обрабатывает outbox, пока не вызван Shutdown. Приложение вызывает его
+// в отдельной горутине. Если Shutdown уже вызван, Start сразу возвращается.
 func (p *ProcessorWithSyncProducer) Start() {
 	const op = "ProcessorWithSyncProducer.Start"
 
-	p.log.Info("processor with sync producer is started", slog.String("source", op))
+	// Запуск и остановка согласованы под мьютексом: Shutdown, вызванный сразу
+	// после go Start(), либо дождётся обработки, либо Start увидит остановку и не начнёт её.
+	p.mu.Lock()
+	if p.started || p.stopping {
+		p.mu.Unlock()
+		return
+	}
+	p.started = true
+	p.mu.Unlock()
+	defer close(p.stopped)
 
-	p.startWG.Add(1)
-	defer p.startWG.Done()
+	p.log.Info("processor with sync producer is started", slog.String("source", op))
 
 	ticker := time.NewTicker(p.selectInterval)
 	defer ticker.Stop()
@@ -68,6 +82,13 @@ func (p *ProcessorWithSyncProducer) Start() {
 			selectCancel()
 
 			for _, record := range records {
+
+				// После Shutdown новые записи не отправляются: они останутся в outbox
+				// до следующего запуска. Запись, которая уже отправляется, дописывается.
+				if p.stopRequested() {
+					return
+				}
+
 				sendCtx, sendCancel := context.WithTimeout(context.Background(), p.opTimeout)
 
 				err := p.producer.SendMessage(sendCtx, record.ID, record.Message.Topic, []byte(record.Message.Key), record.Message.Payload)
@@ -98,16 +119,34 @@ func (p *ProcessorWithSyncProducer) Start() {
 	}
 }
 
-func (p *ProcessorWithSyncProducer) Shutdown() {
+// stopRequested сообщает, вызван ли Shutdown.
+func (p *ProcessorWithSyncProducer) stopRequested() bool {
 	select {
 	case <-p.done:
-		return
+		return true
 	default:
-		p.log.Info("processor with sync producer is shutting down")
-
-		close(p.done)
-		p.startWG.Wait()
-
-		p.log.Info("processor with sync producer is shutdowned successfully")
+		return false
 	}
+}
+
+// Shutdown останавливает обработку и ждёт, пока Start вернётся.
+// Повторный вызов ничего не делает.
+func (p *ProcessorWithSyncProducer) Shutdown() {
+	p.mu.Lock()
+	if p.stopping {
+		p.mu.Unlock()
+		return
+	}
+	p.stopping = true
+	started := p.started
+	close(p.done)
+	p.mu.Unlock()
+
+	p.log.Info("processor with sync producer is shutting down")
+
+	if started {
+		<-p.stopped
+	}
+
+	p.log.Info("processor with sync producer is shutdowned successfully")
 }
