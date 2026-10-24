@@ -44,6 +44,7 @@ func New(log *slog.Logger, placeService handlersgrpc.PlaceService, port int) *Se
 	}
 }
 
+// Run открывает порт из конфига и обслуживает запросы до остановки сервера.
 func (sa *ServerApp) Run() error {
 	const op = "ServerApp.Run"
 
@@ -52,6 +53,14 @@ func (sa *ServerApp) Run() error {
 	if err != nil {
 		return fmt.Errorf("%s: %w", op, err)
 	}
+
+	return sa.Serve(l)
+}
+
+// Serve обслуживает запросы на уже открытом listener. Отделён от Run, чтобы
+// в тестах запускать сервер без сети (bufconn) или на случайном порту.
+func (sa *ServerApp) Serve(l net.Listener) error {
+	const op = "ServerApp.Serve"
 
 	sa.log.Info("place grpc server started", slog.String("addr", l.Addr().String()))
 
