@@ -68,6 +68,13 @@ func (p *ProcessorWithSyncProducer) Start() {
 			selectCancel()
 
 			for _, record := range records {
+
+				// После Shutdown новые записи не отправляются: они останутся в outbox
+				// до следующего запуска. Запись, которая уже отправляется, дописывается.
+				if p.stopRequested() {
+					return
+				}
+
 				sendCtx, sendCancel := context.WithTimeout(context.Background(), p.opTimeout)
 
 				err := p.producer.SendMessage(sendCtx, record.ID, record.Message.Topic, []byte(record.Message.Key), record.Message.Payload)
@@ -95,6 +102,16 @@ func (p *ProcessorWithSyncProducer) Start() {
 				sendCancel()
 			}
 		}
+	}
+}
+
+// stopRequested сообщает, вызван ли Shutdown.
+func (p *ProcessorWithSyncProducer) stopRequested() bool {
+	select {
+	case <-p.done:
+		return true
+	default:
+		return false
 	}
 }
 
