@@ -19,8 +19,12 @@ type ProcessorWithSyncProducer struct {
 	opTimeout      time.Duration
 	selectInterval time.Duration
 	selectSize     int
-	done           chan struct{}
-	startWG        *sync.WaitGroup
+
+	mu       sync.Mutex
+	started  bool
+	stopping bool
+	done     chan struct{} // закрывается в Shutdown: обработку пора остановить
+	stopped  chan struct{} // закрывается, когда Start вернулся
 }
 
 func NewProcessorWithSyncProducer(
@@ -39,17 +43,27 @@ func NewProcessorWithSyncProducer(
 		selectInterval: selectInterval,
 		selectSize:     selectSize,
 		done:           make(chan struct{}),
-		startWG:        &sync.WaitGroup{},
+		stopped:        make(chan struct{}),
 	}
 }
 
+// Start обрабатывает outbox, пока не вызван Shutdown. Приложение вызывает его
+// в отдельной горутине. Если Shutdown уже вызван, Start сразу возвращается.
 func (p *ProcessorWithSyncProducer) Start() {
 	const op = "ProcessorWithSyncProducer.Start"
 
-	p.log.Info("processor with sync producer is started", slog.String("source", op))
+	// Запуск и остановка согласованы под мьютексом: Shutdown, вызванный сразу
+	// после go Start(), либо дождётся обработки, либо Start увидит остановку и не начнёт её.
+	p.mu.Lock()
+	if p.started || p.stopping {
+		p.mu.Unlock()
+		return
+	}
+	p.started = true
+	p.mu.Unlock()
+	defer close(p.stopped)
 
-	p.startWG.Add(1)
-	defer p.startWG.Done()
+	p.log.Info("processor with sync producer is started", slog.String("source", op))
 
 	ticker := time.NewTicker(p.selectInterval)
 	defer ticker.Stop()
@@ -115,16 +129,24 @@ func (p *ProcessorWithSyncProducer) stopRequested() bool {
 	}
 }
 
+// Shutdown останавливает обработку и ждёт, пока Start вернётся.
+// Повторный вызов ничего не делает.
 func (p *ProcessorWithSyncProducer) Shutdown() {
-	select {
-	case <-p.done:
+	p.mu.Lock()
+	if p.stopping {
+		p.mu.Unlock()
 		return
-	default:
-		p.log.Info("processor with sync producer is shutting down")
-
-		close(p.done)
-		p.startWG.Wait()
-
-		p.log.Info("processor with sync producer is shutdowned successfully")
 	}
+	p.stopping = true
+	started := p.started
+	close(p.done)
+	p.mu.Unlock()
+
+	p.log.Info("processor with sync producer is shutting down")
+
+	if started {
+		<-p.stopped
+	}
+
+	p.log.Info("processor with sync producer is shutdowned successfully")
 }
