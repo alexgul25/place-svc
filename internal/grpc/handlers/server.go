@@ -28,8 +28,11 @@ func Register(gRPCServer *grpc.Server, placeServer PlaceService) {
 }
 
 func (s *serverAPI) AddPlace(ctx context.Context, in *placev1.AddPlaceRequest) (*placev1.AddPlaceResponse, error) {
-	if in.GetName() == "" {
-		return nil, status.Error(codes.InvalidArgument, "name is required")
+	if err := validateText("name", in.GetName(), true, maxNameLength); err != nil {
+		return nil, err
+	}
+	if err := validateText("info", in.GetInfo(), false, maxInfoLength); err != nil {
+		return nil, err
 	}
 
 	userID, ok := interceptors.GetUserIDFromContext(ctx)
