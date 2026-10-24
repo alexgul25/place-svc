@@ -25,6 +25,15 @@ func NewSyncProducer(brokers []string, source string, timeout time.Duration) (*S
 	config.Producer.Compression = sarama.CompressionSnappy
 	config.Producer.Timeout = timeout
 
+	// sarama не принимает context, поэтому время работы с брокером ограничивают только
+	// сетевые таймауты. По умолчанию они 30 с: с брокером, который не отвечает, отправка
+	// длилась 2 минуты (четыре попытки), а подключение при запуске - 6. Теперь каждая
+	// сетевая операция и получение метаданных ограничены тем же timeout.
+	config.Net.DialTimeout = timeout
+	config.Net.ReadTimeout = timeout
+	config.Net.WriteTimeout = timeout
+	config.Metadata.Timeout = timeout
+
 	producer, err := sarama.NewSyncProducer(brokers, config)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create sync producer: %w", err)
@@ -36,6 +45,8 @@ func NewSyncProducer(brokers []string, source string, timeout time.Duration) (*S
 	}, nil
 }
 
+// SendMessage отправляет сообщение и ждёт подтверждения брокера. ctx проверяется только
+// перед отправкой: дальше время ограничивают сетевые таймауты продюсера.
 func (sp *SyncProducer) SendMessage(ctx context.Context, messageID string, topic string, key, value []byte) error {
 	if err := ctx.Err(); err != nil {
 		return err
