@@ -76,12 +76,13 @@ func (pl *PlaceLogic) AddPlace(ctx context.Context, userID, name, info string) (
 
 	log.Info("attempting to invalidate cache")
 
-	err = pl.cache.Invalidate(ctx, place.UserID)
-	if err != nil {
+	// Ошибка кеша не делает запрос неудачным: место уже сохранено,
+	// а устаревший список исчезнет из кеша по TTL.
+	if err := pl.cache.Invalidate(ctx, place.UserID); err != nil {
 		log.Error("failed to invalidate cache", slog.Any("error", err))
+	} else {
+		log.Info("cache invalidated successfully")
 	}
-
-	log.Info("cache invalidated successfully")
 
 	return place, nil
 }
@@ -121,12 +122,12 @@ func (pl *PlaceLogic) GetUserPlaces(ctx context.Context, userID string) ([]model
 
 	log.Info("attempting to update cache")
 
-	err = pl.cache.Set(ctx, userID, places)
-	if err != nil {
-		log.Error("failed to update cache")
+	// Ошибка кеша не делает запрос неудачным: список уже получен из БД.
+	if err := pl.cache.Set(ctx, userID, places); err != nil {
+		log.Error("failed to update cache", slog.Any("error", err))
+	} else {
+		log.Info("cache updated successfully")
 	}
-
-	log.Info("cache updated successfully")
 
 	return places, nil
 }
