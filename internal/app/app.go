@@ -102,27 +102,44 @@ func (a *App) close() error {
 	)
 }
 
-func (a *App) Run() {
+// Run запускает outbox-процессор и обслуживает gRPC-запросы до остановки сервера.
+// Ошибка означает, что сервер не смог запуститься или аварийно остановился
+// (например, порт занят). После GracefulShutdown Run возвращает nil.
+func (a *App) Run() error {
 	const op = "App.Run"
 
 	a.log.Info("starting app", slog.String("source", op))
 
 	go a.processor.Start()
-	go a.grpcServer.MustRun()
 
-	a.log.Info("app is running", slog.String("source", op))
+	return a.grpcServer.Run()
 }
 
-func (a *App) GracefulShutdown() {
+// GracefulShutdown останавливает gRPC-сервер и outbox-процессор и закрывает соединения
+// с Redis, Kafka и БД, но не дольше, чем живёт ctx. Если время вышло (например, процессор
+// ждёт ответа зависшей Kafka, а sarama прервать нельзя), GracefulShutdown возвращается,
+// не дожидаясь остального: процесс завершится, а неотправленные записи останутся в outbox.
+func (a *App) GracefulShutdown(ctx context.Context) {
 	const op = "App.GracefulShutdown"
 
-	a.log.Info("app is shutting down gracefully", slog.String("source", op))
+	log := a.log.With(slog.String("source", op))
+	log.Info("app is shutting down gracefully")
 
-	a.grpcServer.GracefulStop()
-	a.processor.Shutdown()
-	if err := a.close(); err != nil {
-		a.log.Error("failed to close app components", slog.String("source", op), slog.Any("error", err))
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+
+		a.grpcServer.GracefulStop(ctx)
+		a.processor.Shutdown()
+		if err := a.close(); err != nil {
+			log.Error("failed to close app components", slog.Any("error", err))
+		}
+	}()
+
+	select {
+	case <-done:
+		log.Info("app has shut down gracefully")
+	case <-ctx.Done():
+		log.Warn("graceful shutdown timed out, exiting without waiting for the outbox processor and connections")
 	}
-
-	a.log.Info("app has shut down gracefully")
 }
