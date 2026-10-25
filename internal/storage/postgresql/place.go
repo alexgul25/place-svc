@@ -22,25 +22,6 @@ func NewPlaceStorage(db *sql.DB, outboxStorage *OutboxStorage) *PlaceStorage {
 	}
 }
 
-func (ps *PlaceStorage) CreatePlace(ctx context.Context, userID, name, info string) (models.Place, error) {
-	const op = "postgresql.PlaceStorage.CreatePlace"
-
-	query := `
-		INSERT INTO places (user_id, place_name, info, created_at)
-		VALUES ($1, $2, $3, NOW())
-		RETURNING id, created_at
-	`
-
-	place := models.Place{UserID: userID, Name: name, Info: info}
-	row := ps.db.QueryRowContext(ctx, query, place.UserID, place.Name, place.Info)
-	err := row.Scan(&place.ID, &place.CreatedAt)
-	if err != nil {
-		return models.Place{}, fmt.Errorf("%s: %w", op, err)
-	}
-
-	return place, nil
-}
-
 func (ps *PlaceStorage) InsertPlaceWithOutbox(ctx context.Context, place models.Place, event events.PlaceCreated) error {
 	const op = "postgresql.PlaceStorage.InsertPlaceWithOutbox"
 
