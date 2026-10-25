@@ -39,6 +39,9 @@ func NewPlaceCache(
 	ctx, cancel := context.WithTimeout(context.Background(), dialTimeout)
 	defer cancel()
 	if err := client.Ping(ctx).Err(); err != nil {
+		// Клиент уже запустил фоновые горутины: без Close они продолжают работать
+		// и после того, как NewPlaceCache вернул ошибку.
+		_ = client.Close()
 		return nil, fmt.Errorf("%s: %w", op, err)
 	}
 
