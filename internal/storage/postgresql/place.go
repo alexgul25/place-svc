@@ -56,7 +56,7 @@ func (ps *PlaceStorage) InsertPlaceWithOutbox(ctx context.Context, place models.
 }
 
 func (ps *PlaceStorage) GetPlacesByUserID(ctx context.Context, userID string) ([]models.Place, error) {
-	const op = "postgresql.PlaceStorage.GetPlaceByUserID"
+	const op = "postgresql.PlaceStorage.GetPlacesByUserID"
 
 	// Места идут от старых к новым, а id упорядочивает места,
 	// добавленные в одну и ту же микросекунду.
