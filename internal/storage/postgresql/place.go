@@ -22,25 +22,6 @@ func NewPlaceStorage(db *sql.DB, outboxStorage *OutboxStorage) *PlaceStorage {
 	}
 }
 
-func (ps *PlaceStorage) CreatePlace(ctx context.Context, userID, name, info string) (models.Place, error) {
-	const op = "postgresql.PlaceStorage.CreatePlace"
-
-	query := `
-		INSERT INTO places (user_id, place_name, info, created_at)
-		VALUES ($1, $2, $3, NOW())
-		RETURNING id, created_at
-	`
-
-	place := models.Place{UserID: userID, Name: name, Info: info}
-	row := ps.db.QueryRowContext(ctx, query, place.UserID, place.Name, place.Info)
-	err := row.Scan(&place.ID, &place.CreatedAt)
-	if err != nil {
-		return models.Place{}, fmt.Errorf("%s: %w", op, err)
-	}
-
-	return place, nil
-}
-
 func (ps *PlaceStorage) InsertPlaceWithOutbox(ctx context.Context, place models.Place, event events.PlaceCreated) error {
 	const op = "postgresql.PlaceStorage.InsertPlaceWithOutbox"
 
@@ -75,12 +56,15 @@ func (ps *PlaceStorage) InsertPlaceWithOutbox(ctx context.Context, place models.
 }
 
 func (ps *PlaceStorage) GetPlacesByUserID(ctx context.Context, userID string) ([]models.Place, error) {
-	const op = "postgresql.PlaceStorage.GetPlaceByUserID"
+	const op = "postgresql.PlaceStorage.GetPlacesByUserID"
 
+	// Места идут от старых к новым, а id упорядочивает места,
+	// добавленные в одну и ту же микросекунду.
 	query := `
 		SELECT id, place_name, info, created_at
 		FROM places
 		WHERE user_id = $1
+		ORDER BY created_at, id
 	`
 
 	rows, err := ps.db.QueryContext(ctx, query, userID)
