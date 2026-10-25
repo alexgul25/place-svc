@@ -1,14 +1,16 @@
 package main
 
 import (
+	"context"
+	"database/sql"
 	"fmt"
 	"log/slog"
 	"os"
 
 	_ "github.com/jackc/pgx/v5/stdlib"
-	"github.com/pressly/goose/v3"
 
 	"github.com/alexgul25/place-svc/internal/config"
+	"github.com/alexgul25/place-svc/migrations"
 )
 
 func main() {
@@ -26,14 +28,18 @@ func run() error {
 		return fmt.Errorf("failed to load config: %w", err)
 	}
 
-	db, err := goose.OpenDBWithDriver("pgx", cfg.Database.DSN())
+	db, err := sql.Open("pgx", cfg.Database.DSN())
 	if err != nil {
 		return fmt.Errorf("failed to open DB: %w", err)
 	}
 	defer db.Close()
 
-	pathToMigrations := "./migrations"
-	if err := goose.Up(db, pathToMigrations); err != nil {
+	// Миграции встроены в бинарник: мигратор не зависит от текущей папки.
+	results, err := migrations.Up(context.Background(), db)
+	for _, r := range results {
+		slog.Info("migration applied", slog.String("file", r.Source.Path), slog.Duration("duration", r.Duration))
+	}
+	if err != nil {
 		return fmt.Errorf("failed to up migrations: %w", err)
 	}
 
