@@ -29,7 +29,7 @@ USER_HEADER_NAME := x-user-id
 COVER_PROFILE := coverage.out
 COVER_HTML := coverage.html
 
-# PostgreSQL и Redis для интеграционных тестов: контейнеры с отдельными портами,
+# PostgreSQL, Redis и Kafka для интеграционных тестов: контейнеры с отдельными портами,
 # чтобы не мешать локальным серверам
 TEST_DB_CONTAINER := place-svc-test-db
 TEST_DB_IMAGE ?= postgres:18-alpine
@@ -41,6 +41,11 @@ TEST_REDIS_IMAGE ?= redis:8.10-alpine
 TEST_REDIS_PORT ?= 56379
 TEST_REDIS_ADDR ?= localhost:$(TEST_REDIS_PORT)
 
+TEST_KAFKA_CONTAINER := place-svc-test-kafka
+TEST_KAFKA_IMAGE ?= apache/kafka:4.3.1
+TEST_KAFKA_PORT ?= 59092
+TEST_KAFKA_BROKERS ?= localhost:$(TEST_KAFKA_PORT)
+
 # Контейнер нужен, только если адрес сервера не задан явно (в окружении или в командной строке make)
 ifeq ($(origin TEST_DATABASE_URL),file)
 TEST_INFRA_DEPS += _test_db_up
@@ -48,9 +53,13 @@ endif
 ifeq ($(origin TEST_REDIS_ADDR),file)
 TEST_INFRA_DEPS += _test_redis_up
 endif
+ifeq ($(origin TEST_KAFKA_BROKERS),file)
+TEST_INFRA_DEPS += _test_kafka_up
+endif
 
 # Переменные, через которые интеграционные тесты находят серверы
-TEST_INFRA_ENV := TEST_DATABASE_URL="$(TEST_DATABASE_URL)" TEST_REDIS_ADDR="$(TEST_REDIS_ADDR)"
+TEST_INFRA_ENV := TEST_DATABASE_URL="$(TEST_DATABASE_URL)" TEST_REDIS_ADDR="$(TEST_REDIS_ADDR)" \
+	TEST_KAFKA_BROKERS="$(TEST_KAFKA_BROKERS)"
 
 USER_FILE := .user_id
 override USER_ID = $(shell cat $(USER_FILE) 2>/dev/null | tr -d '\r\n')
@@ -59,7 +68,7 @@ override USER_ID = $(shell cat $(USER_FILE) 2>/dev/null | tr -d '\r\n')
 		set-user add-place my-places places \
 		clean clean-id clean-bin clean-cover print-config \
 		_check_tools _check_protoset _check_user _check_lint _check_docker \
-		test test-integration test-cover test-infra-up test-infra-down _test_db_up _test_redis_up \
+		test test-integration test-cover test-infra-up test-infra-down _test_db_up _test_redis_up _test_kafka_up \
 		lint fmt tidy-check vulncheck ci
 
 help: ## Показать список доступных команд
@@ -83,10 +92,10 @@ build: ## Собрать бинарник сервиса
 	@go build -o "$(BINARY)" $(SERVER_CMD)
 	@echo "✅  Собран $(BINARY)"
 
-test: ## Запустить unit-тесты с детектором гонок (без PostgreSQL и Redis)
+test: ## Запустить unit-тесты с детектором гонок (без PostgreSQL, Redis и Kafka)
 	@go test -race ./...
 
-test-integration: $(TEST_INFRA_DEPS) ## Запустить все тесты, включая интеграционные с PostgreSQL и Redis
+test-integration: $(TEST_INFRA_DEPS) ## Запустить все тесты, включая интеграционные с PostgreSQL, Redis и Kafka
 	@$(TEST_INFRA_ENV) go test -race -tags=integration ./...
 
 test-cover: $(TEST_INFRA_DEPS) ## Запустить все тесты и собрать отчёт о покрытии
@@ -95,11 +104,11 @@ test-cover: $(TEST_INFRA_DEPS) ## Запустить все тесты и соб
 	@go tool cover -html="$(COVER_PROFILE)" -o "$(COVER_HTML)"
 	@echo "📊  Покрытие: $$(go tool cover -func="$(COVER_PROFILE)" | awk '/^total:/ {print $$3}'), отчёт: $(COVER_HTML)"
 
-test-infra-up: _test_db_up _test_redis_up ## Запустить PostgreSQL и Redis для интеграционных тестов (Docker)
+test-infra-up: _test_db_up _test_redis_up _test_kafka_up ## Запустить PostgreSQL, Redis и Kafka для интеграционных тестов (Docker)
 
-test-infra-down: ## Остановить и удалить PostgreSQL и Redis для тестов
-	@docker rm -f "$(TEST_DB_CONTAINER)" "$(TEST_REDIS_CONTAINER)" >/dev/null 2>&1 || true
-	@echo "🧹  Контейнеры $(TEST_DB_CONTAINER) и $(TEST_REDIS_CONTAINER) удалены"
+test-infra-down: ## Остановить и удалить PostgreSQL, Redis и Kafka для тестов
+	@docker rm -f "$(TEST_DB_CONTAINER)" "$(TEST_REDIS_CONTAINER)" "$(TEST_KAFKA_CONTAINER)" >/dev/null 2>&1 || true
+	@echo "🧹  Контейнеры $(TEST_DB_CONTAINER), $(TEST_REDIS_CONTAINER) и $(TEST_KAFKA_CONTAINER) удалены"
 
 _test_db_up: _check_docker
 	@if [ -z "$$(docker ps -q -f name=^$(TEST_DB_CONTAINER)$$)" ]; then \
@@ -126,6 +135,34 @@ _test_redis_up: _check_docker
 		sleep 0.5; \
 	done; \
 	echo "❌  Redis не запустился, см. docker logs $(TEST_REDIS_CONTAINER)"; exit 1
+
+# Один узел KRaft, как в date-wishlist-hub-deploy. Брокер слушает внутри контейнера тот же порт,
+# что снаружи: адрес из метаданных (localhost:порт) подходит и тестам, и проверке готовности.
+# Топики не создаются при первом обращении: тесты создают их сами, как kafka-init при деплое.
+_test_kafka_up: _check_docker
+	@if [ -z "$$(docker ps -q -f name=^$(TEST_KAFKA_CONTAINER)$$)" ]; then \
+		echo "📨  Запуск $(TEST_KAFKA_IMAGE) на порту $(TEST_KAFKA_PORT)..."; \
+		docker run -d --rm --name "$(TEST_KAFKA_CONTAINER)" \
+			-e KAFKA_NODE_ID=1 \
+			-e KAFKA_PROCESS_ROLES=broker,controller \
+			-e KAFKA_LISTENERS="PLAINTEXT://:$(TEST_KAFKA_PORT),CONTROLLER://:9093" \
+			-e KAFKA_ADVERTISED_LISTENERS="PLAINTEXT://localhost:$(TEST_KAFKA_PORT)" \
+			-e KAFKA_CONTROLLER_LISTENER_NAMES=CONTROLLER \
+			-e KAFKA_LISTENER_SECURITY_PROTOCOL_MAP=CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT \
+			-e KAFKA_CONTROLLER_QUORUM_VOTERS=1@localhost:9093 \
+			-e KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR=1 \
+			-e KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR=1 \
+			-e KAFKA_TRANSACTION_STATE_LOG_MIN_ISR=1 \
+			-e KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS=0 \
+			-e KAFKA_AUTO_CREATE_TOPICS_ENABLE=false \
+			-p "$(TEST_KAFKA_PORT):$(TEST_KAFKA_PORT)" "$(TEST_KAFKA_IMAGE)" >/dev/null; \
+	fi
+	@for i in $$(seq 1 60); do \
+		docker exec "$(TEST_KAFKA_CONTAINER)" /opt/kafka/bin/kafka-broker-api-versions.sh \
+			--bootstrap-server "localhost:$(TEST_KAFKA_PORT)" >/dev/null 2>&1 && exit 0; \
+		sleep 1; \
+	done; \
+	echo "❌  Kafka не запустилась, см. docker logs $(TEST_KAFKA_CONTAINER)"; exit 1
 
 lint: _check_lint ## Запустить линтеры (как в CI)
 	@golangci-lint run ./...
@@ -237,7 +274,7 @@ _check_tools:
 	@command -v jq >/dev/null 2>&1 || { echo "❌  jq не найден. Установите jq."; exit 1; }
 
 _check_docker:
-	@command -v docker >/dev/null 2>&1 || { echo "❌  docker не найден. Установите Docker или задайте TEST_DATABASE_URL и TEST_REDIS_ADDR вручную."; exit 1; }
+	@command -v docker >/dev/null 2>&1 || { echo "❌  docker не найден. Установите Docker или задайте TEST_DATABASE_URL, TEST_REDIS_ADDR и TEST_KAFKA_BROKERS вручную."; exit 1; }
 
 _check_lint:
 	@command -v golangci-lint >/dev/null 2>&1 || { echo "❌  golangci-lint не найден. Установите golangci-lint (см. README)."; exit 1; }
