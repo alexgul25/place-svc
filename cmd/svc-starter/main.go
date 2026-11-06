@@ -11,6 +11,7 @@ import (
 	"github.com/alexgul25/place-svc/internal/app"
 	"github.com/alexgul25/place-svc/internal/config"
 	"github.com/alexgul25/place-svc/internal/lib/logger"
+	"github.com/alexgul25/place-svc/internal/storage/redis"
 )
 
 func main() {
@@ -30,6 +31,10 @@ func run() error {
 	}
 
 	log := logger.New(cfg.Env)
+	// Ошибку запуска main пишет через slog по умолчанию, а go-redis - через свой логгер.
+	// Оба направляются в лог сервиса, чтобы в окружении prod все записи были в JSON.
+	slog.SetDefault(log)
+	redis.SetLogger(log)
 
 	application, err := app.New(appCtx, log, cfg)
 	if err != nil {
