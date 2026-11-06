@@ -449,6 +449,100 @@ func TestLoadPlaceService_InvalidDotEnv(t *testing.T) {
 }
 
 // ----------------------------------------------------------------------------
+// LoadMigrator
+// ----------------------------------------------------------------------------
+
+// setDatabaseEnv задаёт из обязательных переменных только настройки БД: мигратору нужны лишь они.
+func setDatabaseEnv(t *testing.T) {
+	t.Helper()
+
+	for _, e := range requiredEnv {
+		if strings.HasPrefix(e.key, "DB_") {
+			t.Setenv(e.key, e.value)
+		}
+	}
+}
+
+// Мигратор запускается без ENV и без настроек Kafka, Redis и gRPC-сервера.
+func TestLoadMigrator_OnlyDatabaseSettings(t *testing.T) {
+	isolate(t)
+	setDatabaseEnv(t)
+
+	db, err := config.LoadMigrator()
+	if err != nil {
+		t.Fatalf("LoadMigrator returned error: %v", err)
+	}
+	want := config.DatabaseConfig{User: "user", Password: "secret", DbName: "places", Host: "localhost", Port: 5432}
+	if *db != want {
+		t.Errorf("LoadMigrator() = %+v, want %+v", *db, want)
+	}
+}
+
+// Ошибка в настройке, которая мигратору не нужна, не мешает применить миграции.
+func TestLoadMigrator_IgnoresServiceSettings(t *testing.T) {
+	isolate(t)
+	setDatabaseEnv(t)
+	t.Setenv("GRPCSERVER_PORT", "not-a-number")
+	t.Setenv("KAFKA_PRODUCER_SEND_TIMEOUT", "0s")
+	t.Setenv("REDIS_CACHE_TTL", "1day")
+
+	if _, err := config.LoadMigrator(); err != nil {
+		t.Errorf("LoadMigrator returned error: %v", err)
+	}
+}
+
+func TestLoadMigrator_DatabaseErrors(t *testing.T) {
+	tests := []struct {
+		name, key, value string // пустое value - переменная не задана
+	}{
+		{name: "DB_USER not set", key: "DB_USER"},
+		{name: "DB_PASSWORD not set", key: "DB_PASSWORD"},
+		{name: "DB_NAME not set", key: "DB_NAME"},
+		{name: "DB_HOST not set", key: "DB_HOST"},
+		{name: "DB_PORT not set", key: "DB_PORT"},
+		{name: "DB_PORT is not a number", key: "DB_PORT", value: "not-a-number"},
+		{name: "DB_PORT out of range", key: "DB_PORT", value: "70000"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			isolate(t)
+			setDatabaseEnv(t)
+			if tt.value == "" {
+				os.Unsetenv(tt.key)
+			} else {
+				t.Setenv(tt.key, tt.value)
+			}
+
+			db, err := config.LoadMigrator()
+			if err == nil {
+				t.Fatalf("expected error for %s, got config %+v", tt.key, db)
+			}
+			if !strings.Contains(err.Error(), tt.key) {
+				t.Errorf("error %q does not mention %s", err, tt.key)
+			}
+			if db != nil {
+				t.Errorf("expected nil config on error, got %+v", db)
+			}
+		})
+	}
+}
+
+func TestLoadMigrator_DotEnv(t *testing.T) {
+	isolate(t)
+	writeDotEnv(t, "DB_USER=file-user\nDB_PASSWORD=file-secret\nDB_NAME=file-db\nDB_HOST=file-host\nDB_PORT=6432\n")
+
+	db, err := config.LoadMigrator()
+	if err != nil {
+		t.Fatalf("LoadMigrator returned error: %v", err)
+	}
+	want := config.DatabaseConfig{User: "file-user", Password: "file-secret", DbName: "file-db", Host: "file-host", Port: 6432}
+	if *db != want {
+		t.Errorf("LoadMigrator() = %+v, want values from .env %+v", *db, want)
+	}
+}
+
+// ----------------------------------------------------------------------------
 // DSN
 // ----------------------------------------------------------------------------
 

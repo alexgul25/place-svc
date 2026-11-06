@@ -70,27 +70,26 @@ type RedisCacheConfig struct {
 	TTL          time.Duration `envconfig:"REDIS_CACHE_TTL"`
 }
 
-func load() (*Config, error) {
+// load читает .env (если он есть) и переменные окружения в spec.
+func load(spec any) error {
 	const op = "load"
 
 	err := godotenv.Load()
 	if err != nil && !errors.Is(err, fs.ErrNotExist) {
-		return nil, fmt.Errorf("%s: %w", op, err)
+		return fmt.Errorf("%s: %w", op, err)
 	}
 
-	var cfg Config
-	err = envconfig.Process("", &cfg)
-	if err != nil {
-		return nil, fmt.Errorf("%s: %w", op, err)
+	if err := envconfig.Process("", spec); err != nil {
+		return fmt.Errorf("%s: %w", op, err)
 	}
-	return &cfg, nil
+	return nil
 }
 
 func LoadPlaceService() (*Config, error) {
 	const op = "LoadPlaceService"
 
-	cfg, err := load()
-	if err != nil {
+	var cfg Config
+	if err := load(&cfg); err != nil {
 		return nil, err
 	}
 
@@ -98,20 +97,8 @@ func LoadPlaceService() (*Config, error) {
 		return nil, fmt.Errorf("%s: env variable ENV not set", op)
 	}
 
-	if cfg.Database.User == "" {
-		return nil, fmt.Errorf("%s: env variable DB_USER not set", op)
-	}
-	if cfg.Database.Password == "" {
-		return nil, fmt.Errorf("%s: env variable DB_PASSWORD not set", op)
-	}
-	if cfg.Database.DbName == "" {
-		return nil, fmt.Errorf("%s: env variable DB_NAME not set", op)
-	}
-	if cfg.Database.Host == "" {
-		return nil, fmt.Errorf("%s: env variable DB_HOST not set", op)
-	}
-	if cfg.Database.Port == 0 {
-		return nil, fmt.Errorf("%s: env variable DB_PORT not set", op)
+	if err := validateDatabase(&cfg.Database); err != nil {
+		return nil, fmt.Errorf("%s: %w", op, err)
 	}
 
 	cfg.KafkaProducer.Brokers = splitList(cfg.KafkaProducer.BrokersRaw)
@@ -126,11 +113,52 @@ func LoadPlaceService() (*Config, error) {
 		return nil, fmt.Errorf("%s: env variable REDIS_CACHE_TTL not set", op)
 	}
 
-	if err := validateRanges(cfg); err != nil {
+	if err := validateRanges(&cfg); err != nil {
 		return nil, fmt.Errorf("%s: %w", op, err)
 	}
 
-	return cfg, nil
+	return &cfg, nil
+}
+
+// LoadMigrator загружает настройки мигратора. Ему нужна только БД, поэтому
+// остальные переменные сервиса (Kafka, Redis, gRPC-сервер) не читаются и не проверяются.
+func LoadMigrator() (*DatabaseConfig, error) {
+	const op = "LoadMigrator"
+
+	var db DatabaseConfig
+	if err := load(&db); err != nil {
+		return nil, err
+	}
+
+	if err := validateDatabase(&db); err != nil {
+		return nil, fmt.Errorf("%s: %w", op, err)
+	}
+
+	return &db, nil
+}
+
+// validateDatabase проверяет, что заданы все настройки БД и порт допустим.
+func validateDatabase(db *DatabaseConfig) error {
+	required := []struct {
+		name string
+		set  bool
+	}{
+		{"DB_USER", db.User != ""},
+		{"DB_PASSWORD", db.Password != ""},
+		{"DB_NAME", db.DbName != ""},
+		{"DB_HOST", db.Host != ""},
+		{"DB_PORT", db.Port != 0},
+	}
+	for _, r := range required {
+		if !r.set {
+			return fmt.Errorf("env variable %s not set", r.name)
+		}
+	}
+
+	if db.Port < 1 || db.Port > 65535 {
+		return fmt.Errorf("env variable DB_PORT must be between 1 and 65535, got %d", db.Port)
+	}
+	return nil
 }
 
 // validateRanges проверяет значения, которые разбираются без ошибок, но с которыми
@@ -145,7 +173,6 @@ func validateRanges(cfg *Config) error {
 		name  string
 		value int
 	}{
-		{"DB_PORT", cfg.Database.Port},
 		{"GRPCSERVER_PORT", cfg.GRPCServer.Port},
 	}
 	for _, p := range ports {
