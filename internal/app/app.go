@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"slices"
 
 	grpcapp "github.com/alexgul25/place-svc/internal/app/grpc"
 	"github.com/alexgul25/place-svc/internal/config"
@@ -33,14 +34,25 @@ func New(
 	ctx context.Context,
 	log *slog.Logger,
 	cfg *config.Config,
-) (*App, error) {
+) (_ *App, err error) {
+	// Если запуск не удался, уже открытые соединения закрываются в обратном порядке.
+	// Ошибки закрытия не важны: наружу уходит ошибка запуска.
+	var opened []io.Closer
+	defer func() {
+		if err != nil {
+			for _, c := range slices.Backward(opened) {
+				_ = c.Close()
+			}
+		}
+	}()
+
 	storage, err := postgresql.NewStorage(cfg.Database.DSN())
 	if err != nil {
 		return nil, fmt.Errorf("failed to init storage: %w", err)
 	}
+	opened = append(opened, storage)
 
 	if err := storage.Ping(ctx); err != nil {
-		storage.Close()
 		return nil, fmt.Errorf("failed to ping storage: %w", err)
 	}
 
@@ -50,6 +62,7 @@ func New(
 	if err != nil {
 		return nil, fmt.Errorf("failed to init kafka sync producer: %w", err)
 	}
+	opened = append(opened, syncProducer)
 	log.Info("init kafka sync producer", slog.Any("brokers", cfg.KafkaProducer.Brokers))
 
 	processor := outbox.NewProcessorWithSyncProducer(
