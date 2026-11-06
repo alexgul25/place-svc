@@ -1,4 +1,4 @@
-# CI для Place Service: линтеры, поиск уязвимостей, unit- и интеграционные тесты.
+# CI для Place Service: линтеры, поиск уязвимостей, unit-, интеграционные и E2E-тесты, проверка Docker-образа.
 name: CI
 
 on:
@@ -158,16 +158,20 @@ jobs:
           go-version-file: go.mod
           cache-dependency-path: go.sum
 
-      # Все тесты, включая интеграционные. -coverpkg=./... считает покрытие по всем пакетам,
-      # поэтому итоговый процент - покрытие всего сервиса.
+      # Все тесты, включая интеграционные и E2E. Данные о покрытии пишут и тесты,
+      # и запущенные в E2E-тестах бинарники - в общий каталог covdata.
+      # -coverpkg=./... считает покрытие по всем пакетам, поэтому итог - покрытие всего сервиса.
       - name: Test
-        run: go test -race -tags=integration -covermode=atomic -coverpkg=./... -coverprofile=coverage.out ./...
+        run: |
+          mkdir -p covdata
+          go test -race -tags=integration -covermode=atomic -coverpkg=./... ./... -args -test.gocoverdir="$PWD/covdata"
 
       # Итог покрытия попадает на страницу прогона (Summary), HTML-отчёт - в артефакт.
       # Отчёт один: с самых новых версий серверов.
       - name: Coverage report
         if: matrix.versions == 'newest'
         run: |
+          go tool covdata textfmt -i=covdata -o coverage.out
           go tool cover -html=coverage.out -o coverage.html
           total=$(go tool cover -func=coverage.out | awk '/^total:/ {print $3}')
           {
@@ -191,3 +195,63 @@ jobs:
             coverage.out
             coverage.html
           retention-days: 14
+
+  docker:
+    name: Docker image
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    # Сервису для запуска нужны все три сервера, мигратору - только PostgreSQL.
+    services:
+      postgres:
+        image: postgres:18-alpine
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: place_svc_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -h 127.0.0.1 -U postgres"
+          --health-interval 2s
+          --health-timeout 5s
+          --health-retries 30
+      redis:
+        image: redis:8.10-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 2s
+          --health-timeout 5s
+          --health-retries 30
+      kafka:
+        image: apache/kafka:4.3.1
+        env:
+          KAFKA_NODE_ID: "1"
+          KAFKA_PROCESS_ROLES: broker,controller
+          KAFKA_LISTENERS: PLAINTEXT://:9092,CONTROLLER://:9093
+          KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://localhost:9092
+          KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+          KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT
+          KAFKA_CONTROLLER_QUORUM_VOTERS: 1@localhost:9093
+          KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: "1"
+          KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: "1"
+          KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: "1"
+          KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: "0"
+          KAFKA_AUTO_CREATE_TOPICS_ENABLE: "false"
+        ports:
+          - 9092:9092
+        options: >-
+          --health-cmd "/opt/kafka/bin/kafka-broker-api-versions.sh --bootstrap-server localhost:9092"
+          --health-interval 5s
+          --health-timeout 20s
+          --health-retries 30
+    steps:
+      - uses: actions/checkout@v7
+
+      # Сборка образа проверяет и Dockerfile, и то, что код собирается в нём.
+      - name: Build image
+        run: docker build -t place-svc:ci .
+
+      # Тот же скрипт, что и make docker-smoke: миграции, запуск, health-check, остановка.
+      - name: Smoke test
+        run: bash scripts/docker-smoke.sh place-svc:ci
