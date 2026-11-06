@@ -4,6 +4,8 @@ import (
 	"context"
 	"errors"
 	"net"
+	"runtime"
+	"slices"
 	"sync"
 	"testing"
 	"time"
@@ -55,7 +57,7 @@ func newBroker(t *testing.T, produce sarama.MockResponse) (*sarama.MockBroker, f
 func newProducer(t *testing.T, addr string) *kafka.SyncProducer {
 	t.Helper()
 
-	p, err := kafka.NewSyncProducer([]string{addr}, "place-svc", sendTimeout)
+	p, err := kafka.NewSyncProducer(t.Context(), []string{addr}, "place-svc", sendTimeout)
 	if err != nil {
 		t.Fatalf("NewSyncProducer returned error: %v", err)
 	}
@@ -170,7 +172,7 @@ func TestNewSyncProducer_UnreachableBroker(t *testing.T) {
 	addr := l.Addr().String()
 	l.Close()
 
-	p, err := kafka.NewSyncProducer([]string{addr}, "place-svc", sendTimeout)
+	p, err := kafka.NewSyncProducer(t.Context(), []string{addr}, "place-svc", sendTimeout)
 	if err == nil {
 		p.Close()
 		t.Fatal("NewSyncProducer returned nil error for an unreachable broker")
@@ -194,7 +196,7 @@ func TestNewSyncProducer_UnresponsiveBroker(t *testing.T) {
 	}
 	done := make(chan result, 1)
 	go func() {
-		p, err := kafka.NewSyncProducer([]string{b.Addr()}, "place-svc", sendTimeout)
+		p, err := kafka.NewSyncProducer(t.Context(), []string{b.Addr()}, "place-svc", sendTimeout)
 		done <- result{p, err}
 	}()
 
@@ -207,6 +209,68 @@ func TestNewSyncProducer_UnresponsiveBroker(t *testing.T) {
 	case <-time.After(startupLimit):
 		closeBroker()
 		t.Fatalf("NewSyncProducer did not return within %v: network timeouts do not follow KAFKA_PRODUCER_SEND_TIMEOUT", startupLimit)
+	}
+}
+
+// С брокером, который не отвечает, подключение длится до трёх timeout: с настройками
+// по умолчанию сервис ждал 24 с и не реагировал на SIGTERM, пока не дождётся.
+// Отмена ctx должна прерывать ожидание сразу.
+func TestNewSyncProducer_ContextCanceled(t *testing.T) {
+	b := sarama.NewMockBroker(t, 1)
+	b.SetHandlerByMap(map[string]sarama.MockResponse{})
+	// После закрытия брокера фоновое подключение тоже быстро завершается.
+	t.Cleanup(b.Close)
+
+	ctx, cancel := context.WithCancel(t.Context())
+	time.AfterFunc(50*time.Millisecond, cancel)
+
+	start := time.Now()
+	p, err := kafka.NewSyncProducer(ctx, []string{b.Addr()}, "place-svc", time.Minute)
+	elapsed := time.Since(start)
+	if err == nil {
+		p.Close()
+		t.Fatal("NewSyncProducer succeeded with an unresponsive broker, want error")
+	}
+	if !errors.Is(err, context.Canceled) {
+		t.Errorf("got error %v, want %v", err, context.Canceled)
+	}
+	if elapsed > time.Second {
+		t.Errorf("NewSyncProducer returned %v after start, want right after ctx is canceled", elapsed)
+	}
+}
+
+// Брокер отвечает с задержкой: ctx отменён раньше, чем закончилось подключение. Продюсер,
+// который всё-таки подключился, закрывается в фоне, а не остаётся жить с соединением и горутинами.
+func TestNewSyncProducer_ClosesProducerConnectedAfterCancel(t *testing.T) {
+	before := runtime.NumGoroutine()
+	b, closeBroker := newBroker(t, nil)
+	b.SetLatency(300 * time.Millisecond)
+
+	ctx, cancel := context.WithCancel(t.Context())
+	time.AfterFunc(50*time.Millisecond, cancel)
+	if p, err := kafka.NewSyncProducer(ctx, []string{b.Addr()}, "place-svc", 5*time.Second); err == nil {
+		p.Close()
+		t.Fatal("NewSyncProducer succeeded after ctx was canceled, want error")
+	}
+
+	// Подключение заканчивается в фоне, когда брокер ответит на запрос метаданных.
+	deadline := time.Now().Add(5 * time.Second)
+	for !slices.ContainsFunc(b.History(), func(rr sarama.RequestResponse) bool {
+		_, ok := rr.Request.(*sarama.MetadataRequest)
+		return ok
+	}) {
+		if time.Now().After(deadline) {
+			t.Fatal("the producer did not finish connecting in the background")
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	closeBroker()
+
+	for runtime.NumGoroutine() > before {
+		if time.Now().After(deadline) {
+			t.Fatalf("%d goroutines are running, %d before: the producer connected after cancel was not closed", runtime.NumGoroutine(), before)
+		}
+		time.Sleep(10 * time.Millisecond)
 	}
 }
 
@@ -229,7 +293,7 @@ func TestNewSyncProducer_BlackholeBroker(t *testing.T) {
 
 	done := make(chan error, 1)
 	go func() {
-		p, err := kafka.NewSyncProducer([]string{blackholeAddr}, "place-svc", sendTimeout)
+		p, err := kafka.NewSyncProducer(t.Context(), []string{blackholeAddr}, "place-svc", sendTimeout)
 		if err == nil {
 			p.Close()
 		}

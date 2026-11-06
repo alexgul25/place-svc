@@ -5,6 +5,7 @@
 .user_id
 bin/
 coverage.*
+covdata/
 
 # Служебное, для сборки не нужно
 .git

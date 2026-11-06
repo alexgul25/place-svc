@@ -23,12 +23,13 @@ func main() {
 }
 
 func run() error {
-	cfg, err := config.LoadPlaceService()
+	// Мигратору нужна только БД: настройки Kafka, Redis и gRPC-сервера ему не нужны.
+	dbCfg, err := config.LoadMigrator()
 	if err != nil {
 		return fmt.Errorf("failed to load config: %w", err)
 	}
 
-	db, err := sql.Open("pgx", cfg.Database.DSN())
+	db, err := sql.Open("pgx", dbCfg.DSN())
 	if err != nil {
 		return fmt.Errorf("failed to open DB: %w", err)
 	}

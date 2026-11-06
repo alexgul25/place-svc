@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"slices"
 
 	grpcapp "github.com/alexgul25/place-svc/internal/app/grpc"
 	"github.com/alexgul25/place-svc/internal/config"
@@ -26,30 +27,43 @@ type App struct {
 	cache      io.Closer
 }
 
-// New собирает приложение и проверяет соединение с БД. Если ctx отменяется
-// во время проверки (например, по SIGTERM), New возвращает ошибку.
+// New собирает приложение и проверяет соединения с БД, Kafka и Redis. Если ctx отменяется,
+// пока New ждёт БД или Kafka (например, по SIGTERM), New сразу возвращает ошибку.
+// Ожидание Redis ограничено REDIS_CACHE_DIAL_TIMEOUT.
 func New(
 	ctx context.Context,
 	log *slog.Logger,
 	cfg *config.Config,
-) (*App, error) {
+) (_ *App, err error) {
+	// Если запуск не удался, уже открытые соединения закрываются в обратном порядке.
+	// Ошибки закрытия не важны: наружу уходит ошибка запуска.
+	var opened []io.Closer
+	defer func() {
+		if err != nil {
+			for _, c := range slices.Backward(opened) {
+				_ = c.Close()
+			}
+		}
+	}()
+
 	storage, err := postgresql.NewStorage(cfg.Database.DSN())
 	if err != nil {
 		return nil, fmt.Errorf("failed to init storage: %w", err)
 	}
+	opened = append(opened, storage)
 
 	if err := storage.Ping(ctx); err != nil {
-		storage.Close()
 		return nil, fmt.Errorf("failed to ping storage: %w", err)
 	}
 
 	outboxStorage := postgresql.NewOutboxStorage(storage.DB(), serializer.JSONSerializer{})
 
-	syncProducer, err := kafka.NewSyncProducer(cfg.KafkaProducer.Brokers, cfg.ServiceName, cfg.KafkaProducer.SendTimeout)
+	syncProducer, err := kafka.NewSyncProducer(ctx, cfg.KafkaProducer.Brokers, cfg.ServiceName, cfg.KafkaProducer.SendTimeout)
 	if err != nil {
 		return nil, fmt.Errorf("failed to init kafka sync producer: %w", err)
 	}
-	log.Info("init kafka sync producer", slog.String("brokers", cfg.KafkaProducer.BrokersRaw))
+	opened = append(opened, syncProducer)
+	log.Info("init kafka sync producer", slog.Any("brokers", cfg.KafkaProducer.Brokers))
 
 	processor := outbox.NewProcessorWithSyncProducer(
 		outboxStorage,
