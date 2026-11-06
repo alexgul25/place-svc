@@ -26,8 +26,9 @@ type App struct {
 	cache      io.Closer
 }
 
-// New собирает приложение и проверяет соединение с БД. Если ctx отменяется
-// во время проверки (например, по SIGTERM), New возвращает ошибку.
+// New собирает приложение и проверяет соединения с БД, Kafka и Redis. Если ctx отменяется,
+// пока New ждёт БД или Kafka (например, по SIGTERM), New сразу возвращает ошибку.
+// Ожидание Redis ограничено REDIS_CACHE_DIAL_TIMEOUT.
 func New(
 	ctx context.Context,
 	log *slog.Logger,
@@ -45,7 +46,7 @@ func New(
 
 	outboxStorage := postgresql.NewOutboxStorage(storage.DB(), serializer.JSONSerializer{})
 
-	syncProducer, err := kafka.NewSyncProducer(cfg.KafkaProducer.Brokers, cfg.ServiceName, cfg.KafkaProducer.SendTimeout)
+	syncProducer, err := kafka.NewSyncProducer(ctx, cfg.KafkaProducer.Brokers, cfg.ServiceName, cfg.KafkaProducer.SendTimeout)
 	if err != nil {
 		return nil, fmt.Errorf("failed to init kafka sync producer: %w", err)
 	}

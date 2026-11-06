@@ -13,7 +13,12 @@ type SyncProducer struct {
 	producer sarama.SyncProducer
 }
 
-func NewSyncProducer(brokers []string, source string, timeout time.Duration) (*SyncProducer, error) {
+// NewSyncProducer подключается к брокерам и получает метаданные кластера. sarama не принимает
+// context, а с брокером, который не отвечает, подключение длится до трёх timeout. Поэтому
+// подключение идёт в отдельной горутине: если ctx отменяется раньше (например, по SIGTERM
+// во время запуска сервиса), NewSyncProducer сразу возвращает ошибку, а продюсер, если
+// подключение всё-таки удастся, закрывается в фоне.
+func NewSyncProducer(ctx context.Context, brokers []string, source string, timeout time.Duration) (*SyncProducer, error) {
 	config := sarama.NewConfig()
 
 	// note from sarama docs:
@@ -34,15 +39,33 @@ func NewSyncProducer(brokers []string, source string, timeout time.Duration) (*S
 	config.Net.WriteTimeout = timeout
 	config.Metadata.Timeout = timeout
 
-	producer, err := sarama.NewSyncProducer(brokers, config)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create sync producer: %w", err)
+	type result struct {
+		producer sarama.SyncProducer
+		err      error
 	}
+	done := make(chan result, 1)
+	go func() {
+		producer, err := sarama.NewSyncProducer(brokers, config)
+		done <- result{producer, err}
+	}()
 
-	return &SyncProducer{
-		source:   []byte(source),
-		producer: producer,
-	}, nil
+	select {
+	case r := <-done:
+		if r.err != nil {
+			return nil, fmt.Errorf("failed to create sync producer: %w", r.err)
+		}
+		return &SyncProducer{
+			source:   []byte(source),
+			producer: r.producer,
+		}, nil
+	case <-ctx.Done():
+		go func() {
+			if r := <-done; r.err == nil {
+				_ = r.producer.Close()
+			}
+		}()
+		return nil, fmt.Errorf("failed to create sync producer: %w", ctx.Err())
+	}
 }
 
 // SendMessage отправляет сообщение и ждёт подтверждения брокера. ctx проверяется только

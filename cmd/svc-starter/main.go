@@ -38,6 +38,11 @@ func run() error {
 
 	application, err := app.New(appCtx, log, cfg)
 	if err != nil {
+		// SIGTERM или SIGINT пришёл до того, как сервис запустился: это остановка, а не сбой.
+		if appCtx.Err() != nil {
+			log.Info("service stopped during startup", slog.Any("reason", err))
+			return nil
+		}
 		return fmt.Errorf("failed to init app: %w", err)
 	}
 
