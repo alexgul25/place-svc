@@ -10,3 +10,4 @@
 # Игнорировать отчёты о покрытии тестами
 coverage.out
 coverage.html
+covdata/

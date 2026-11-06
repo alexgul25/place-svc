@@ -28,6 +28,8 @@ USER_HEADER_NAME := x-user-id
 
 COVER_PROFILE := coverage.out
 COVER_HTML := coverage.html
+# Сырые данные о покрытии: туда пишут и тесты, и бинарники, запущенные в E2E-тестах
+COVER_DIR := covdata
 
 # PostgreSQL, Redis и Kafka для интеграционных тестов: контейнеры с отдельными портами,
 # чтобы не мешать локальным серверам
@@ -69,7 +71,7 @@ override USER_ID = $(shell cat $(USER_FILE) 2>/dev/null | tr -d '\r\n')
 		clean clean-id clean-bin clean-cover print-config \
 		_check_tools _check_protoset _check_user _check_lint _check_docker \
 		test test-integration test-cover test-infra-up test-infra-down _test_db_up _test_redis_up _test_kafka_up \
-		lint fmt tidy-check vulncheck ci
+		docker-build docker-smoke lint fmt tidy-check vulncheck ci
 
 help: ## Показать список доступных команд
 	@awk 'BEGIN {FS = ":.*##"} /^[a-zA-Z0-9_-]+:.*##/ {printf "  \033[36m%-18s\033[0m %s\n", $$1, $$2}' $(MAKEFILE_LIST)
@@ -98,9 +100,11 @@ test: ## Запустить unit-тесты с детектором гонок (
 test-integration: $(TEST_INFRA_DEPS) ## Запустить все тесты, включая интеграционные с PostgreSQL, Redis и Kafka
 	@$(TEST_INFRA_ENV) go test -race -tags=integration ./...
 
-test-cover: $(TEST_INFRA_DEPS) ## Запустить все тесты и собрать отчёт о покрытии
+test-cover: $(TEST_INFRA_DEPS) ## Запустить все тесты и собрать отчёт о покрытии (вместе с E2E)
+	@rm -rf "$(COVER_DIR)" && mkdir -p "$(COVER_DIR)"
 	@$(TEST_INFRA_ENV) go test -race -tags=integration \
-		-covermode=atomic -coverpkg=./... -coverprofile="$(COVER_PROFILE)" ./...
+		-covermode=atomic -coverpkg=./... ./... -args -test.gocoverdir="$(CURDIR)/$(COVER_DIR)"
+	@go tool covdata textfmt -i="$(COVER_DIR)" -o "$(COVER_PROFILE)"
 	@go tool cover -html="$(COVER_PROFILE)" -o "$(COVER_HTML)"
 	@echo "📊  Покрытие: $$(go tool cover -func="$(COVER_PROFILE)" | awk '/^total:/ {print $$3}'), отчёт: $(COVER_HTML)"
 
@@ -135,6 +139,13 @@ _test_redis_up: _check_docker
 		sleep 0.5; \
 	done; \
 	echo "❌  Redis не запустился, см. docker logs $(TEST_REDIS_CONTAINER)"; exit 1
+
+docker-build: _check_docker ## Собрать Docker-образ сервиса
+	@docker build -t "$(SERVICE_NAME):local" .
+
+docker-smoke: docker-build test-infra-up ## Проверить образ: миграции, запуск, health-check, остановка
+	@DB_PORT="$(TEST_DB_PORT)" DB_NAME=place_svc_test KAFKA_PRODUCER_BROKERS="localhost:$(TEST_KAFKA_PORT)" \
+		REDIS_CACHE_ADDR="localhost:$(TEST_REDIS_PORT)" bash scripts/docker-smoke.sh "$(SERVICE_NAME):local"
 
 # Один узел KRaft, как в date-wishlist-hub-deploy. Брокер слушает внутри контейнера тот же порт,
 # что снаружи: адрес из метаданных (localhost:порт) подходит и тестам, и проверке готовности.
@@ -257,7 +268,7 @@ clean-bin: ## Удалить собранные бинарники
 	@rm -rf "$(BIN_DIR)"
 	@echo "🧹  Директория $(BIN_DIR) удалена"
 clean-cover: ## Удалить отчёты о покрытии
-	@rm -f "$(COVER_PROFILE)" "$(COVER_HTML)"
+	@rm -rf "$(COVER_PROFILE)" "$(COVER_HTML)" "$(COVER_DIR)"
 	@echo "🧹  Отчёты о покрытии удалены"
 
 print-config: ## Показать текущую конфигурацию
