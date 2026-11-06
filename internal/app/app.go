@@ -49,7 +49,7 @@ func New(
 	if err != nil {
 		return nil, fmt.Errorf("failed to init kafka sync producer: %w", err)
 	}
-	log.Info("init kafka sync producer", slog.String("brokers", cfg.KafkaProducer.BrokersRaw))
+	log.Info("init kafka sync producer", slog.Any("brokers", cfg.KafkaProducer.Brokers))
 
 	processor := outbox.NewProcessorWithSyncProducer(
 		outboxStorage,
