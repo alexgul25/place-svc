@@ -74,6 +74,10 @@
 
 :open_file_folder: **[./internal/storage](./internal/storage/)** - **слой хранения данных** (PostgreSQL, Redis).
 
+:open_file_folder: **[./internal/testutil](./internal/testutil/)** - общий код для интеграционных тестов (временные базы PostgreSQL, топики Kafka).
+
+:open_file_folder: **[./.github](./.github/)** - CI на GitHub Actions, настройки Dependabot и шаблоны issue.
+
 ## :desktop_computer: Локальный запуск и работа через терминал
 
 В данном разделе приведена инструкция по запуску одного **Place Service**. Сервис можно запустить двумя способами: собрать и запустить бинарник локально или запустить в Docker-контейнере.
@@ -226,11 +230,11 @@ psql -h localhost -U <имя пользователя> -d <имя БД> -c "SELE
 
 - `make test` - запустите unit-тесты с детектором гонок (PostgreSQL, Redis и Kafka не нужны).
 - `make test-integration` - запустите все тесты, включая интеграционные и E2E: PostgreSQL, Redis и Kafka для них поднимаются в Docker-контейнерах на портах `55433`, `56379` и `59092`.
-- `make test-cover` - соберите отчёт о покрытии всеми тестами, включая код, выполненный в собранных бинарниках (`coverage.html`).
+- `make test-cover` - соберите отчёт о покрытии всеми тестами, включая код, выполненный в собранных бинарниках (`coverage.html`), и проверьте порог покрытия (см. [Тестирование и CI](#test_tube-тестирование-и-ci)).
 - `make test-infra-down` - остановите и удалите контейнеры с тестовыми PostgreSQL, Redis и Kafka.
 - `make docker-smoke` - соберите Docker-образ и проверьте его: миграции, запуск, health-check, остановка.
 - `make lint` - запустите линтеры.
-- `make ci` - запустите все проверки CI локально.
+- `make ci` - запустите локально все проверки CI, кроме проверки Docker-образа.
 
 <!-- markdownlint-disable MD033 -->
 <details>
@@ -246,3 +250,38 @@ psql -h localhost -U <имя пользователя> -d <имя БД> -c "SELE
 
 </details>
 <!-- markdownlint-enable MD033 -->
+
+## :test_tube: Тестирование и CI
+
+Сервис тестируется как самостоятельный компонент: остальные сервисы проекта для тестов не нужны.
+
+***Уровни тестов.***
+
+| Уровень | Где | Что проверяется | Команда |
+| --- | --- | --- | --- |
+| Unit | `internal/config`, `internal/lib`, `internal/cache`, `internal/grpc/interceptors`, `internal/service`, `internal/outbox`, `internal/infrastructure` | Конфигурация, логгер, ключи кеша, интерсепторы, сериализатор, бизнес-логика и outbox-процессор с заглушками, продюсер Kafka на `sarama.MockBroker` | `make test` |
+| Компонентные | `internal/grpc/handlers`, `internal/app/grpc`, `internal/app` | gRPC API через сервер в памяти (bufconn), health-check, запуск и корректная остановка приложения с заглушками вместо PostgreSQL, Redis и Kafka | `make test` |
+| Интеграционные | `internal/storage`, `internal/infrastructure/kafka`, `migrations` | SQL-запросы и миграции на настоящем PostgreSQL, кеш на настоящем Redis, продюсер на настоящей Kafka | `make test-integration` |
+| Полный стек | `internal/app` | Приложение, собранное как в `main`: пользовательский сценарий через gRPC, кеш в Redis, события в Kafka через outbox | `make test-integration` |
+| E2E | `e2e` | Собранные бинарники сервиса и мигратора: окружение, коды выхода, сигналы, формат логов | `make test-integration` |
+| Docker | `scripts/docker-smoke.sh` | Образ: миграции, запуск, health-check, остановка | `make docker-smoke` |
+
+***Задачи CI*** ([ci.yml](./.github/workflows/ci.yml)). CI запускается на каждый PR и пуш в `main`, раз в неделю по расписанию и вручную. Для слияния PR в `main` все задачи должны пройти.
+
+| Задача | Что делает |
+| --- | --- |
+| Lint | Проверяет `go.mod` и `go.sum` (`go mod tidy`) и запускает линтеры из [.golangci.yml](./.golangci.yml) |
+| Vulnerabilities | Ищет известные уязвимости в зависимостях и стандартной библиотеке (`govulncheck`) |
+| Unit tests | Собирает пакеты и запускает тесты без PostgreSQL, Redis и Kafka с детектором гонок |
+| Integration tests (oldest, newest) | Запускает все тесты с покрытием (`make test-cover`) на младших (PostgreSQL 15, Redis 7.2, Kafka 4.0) и старших (PostgreSQL 18, Redis 8.10, Kafka 4.3) поддерживаемых версиях серверов |
+| Docker image | Собирает образ и проверяет его тем же скриптом, что и `make docker-smoke` |
+
+***Покрытие.*** `make test-cover` считает общее покрытие всеми тестами, включая код, выполненный внутри собранных бинарников в E2E-тестах. Команда и CI падают, если покрытие ниже порога `COVER_MIN` из [Makefile](./Makefile) (95%) или если какой-то пакет сервиса не попал в отчёт: пакет, который не использует ни один тест, иначе не учитывался бы вовсе. Итог покрытия виден на странице прогона CI (Summary), HTML-отчёт сохраняется в артефакте `coverage`.
+
+***Обновление зависимостей.*** [Dependabot](./.github/dependabot.yml) по понедельникам открывает PR с обновлениями Go-модулей, GitHub Actions и образа `grpc-health-probe`. Новые версии предлагаются не раньше чем через неделю после выхода, исправления уязвимостей - сразу. Вручную обновляются версия Go (`go.mod` и `GO_VERSION` в Dockerfile), версия `golangci-lint` в CI и версии PostgreSQL, Redis и Kafka: в матрице интеграционных тестов и задаче Docker image в CI, а также в `TEST_DB_IMAGE`, `TEST_REDIS_IMAGE` и `TEST_KAFKA_IMAGE` в Makefile. Об уязвимостях в стандартной библиотеке Go сообщит еженедельный прогон `govulncheck`.
+
+***Безопасность репозитория.*** В настройках репозитория (Settings → Advanced Security) включены:
+
+- Dependabot alerts и Dependabot security updates - оповещения об уязвимых зависимостях и PR с исправлением сразу после публикации уязвимости;
+- CodeQL (default setup) - поиск уязвимостей в коде на каждый PR и пуш в `main` и раз в неделю, результаты во вкладке Security;
+- Secret scanning и push protection - поиск токенов и ключей в репозитории, пуш с ними блокируется.
