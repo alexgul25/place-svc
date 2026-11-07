@@ -158,21 +158,21 @@ jobs:
           go-version-file: go.mod
           cache-dependency-path: go.sum
 
-      # Все тесты, включая интеграционные и E2E. Данные о покрытии пишут и тесты,
-      # и запущенные в E2E-тестах бинарники - в общий каталог covdata.
-      # -coverpkg=./... считает покрытие по всем пакетам, поэтому итог - покрытие всего сервиса.
+      # Все тесты, включая интеграционные и E2E, с общим покрытием всего сервиса
+      # (вместе с кодом, выполненным в бинарниках) - та же команда, что и локально.
+      # Шаг падает, если покрытие ниже порога COVER_MIN из Makefile
+      # или какой-то пакет сервиса не попал в отчёт о покрытии.
+      # TEST_DATABASE_URL, TEST_REDIS_ADDR и TEST_KAFKA_BROKERS заданы выше,
+      # поэтому make не запускает свои контейнеры.
       - name: Test
-        run: |
-          mkdir -p covdata
-          go test -race -tags=integration -covermode=atomic -coverpkg=./... ./... -args -test.gocoverdir="$PWD/covdata"
+        run: make test-cover
 
       # Итог покрытия попадает на страницу прогона (Summary), HTML-отчёт - в артефакт.
-      # Отчёт один: с самых новых версий серверов.
+      # Отчёт один: с самых новых версий серверов. Он формируется и тогда,
+      # когда шаг Test упал из-за порога, чтобы было видно, где покрытие просело.
       - name: Coverage report
-        if: matrix.versions == 'newest'
+        if: matrix.versions == 'newest' && !cancelled() && hashFiles('coverage.out') != ''
         run: |
-          go tool covdata textfmt -i=covdata -o coverage.out
-          go tool cover -html=coverage.out -o coverage.html
           total=$(go tool cover -func=coverage.out | awk '/^total:/ {print $3}')
           {
             echo "### Покрытие тестами: ${total}"
@@ -187,7 +187,7 @@ jobs:
           } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Upload coverage
-        if: matrix.versions == 'newest'
+        if: matrix.versions == 'newest' && !cancelled() && hashFiles('coverage.out') != ''
         uses: actions/upload-artifact@v7
         with:
           name: coverage
