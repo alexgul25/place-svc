@@ -1,0 +1,60 @@
+# Dependabot раз в неделю открывает PR с обновлениями зависимостей; каждый PR проходит CI.
+# Документация: https://docs.github.com/en/code-security/dependabot/working-with-dependabot/dependabot-options-reference
+version: 2
+
+updates:
+  # Go-модули из go.mod и go.sum.
+  - package-ecosystem: gomod
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+      time: "06:00"
+      timezone: Europe/Moscow
+    # Новая версия предлагается не раньше чем через неделю после выхода: за это время
+    # неудачные или вредоносные релизы обычно успевают отозвать.
+    # На обновления безопасности задержка не действует.
+    cooldown:
+      default-days: 7
+    groups:
+      # Минорные и патч-обновления - одним PR, мажорные - отдельными.
+      go-modules:
+        patterns: ["*"]
+        update-types: [minor, patch]
+    # Заголовки в стиле репозитория: chore(deps): bump ...
+    commit-message:
+      prefix: chore
+      include: scope
+
+  # Действия в .github/workflows: checkout, setup-go и другие.
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+      time: "06:00"
+      timezone: Europe/Moscow
+    cooldown:
+      default-days: 7
+    groups:
+      github-actions:
+        patterns: ["*"]
+    # ci(deps): bump ...
+    commit-message:
+      prefix: ci
+      include: scope
+
+  # Базовые образы в Dockerfile. Обновляются только теги, записанные прямо в FROM:
+  # сейчас это grpc-health-probe. Версия Go задана через ARG и меняется вручную вместе с go.mod.
+  - package-ecosystem: docker
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+      time: "06:00"
+      timezone: Europe/Moscow
+    cooldown:
+      default-days: 7
+    commit-message:
+      prefix: chore
+      include: scope
