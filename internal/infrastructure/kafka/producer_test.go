@@ -38,7 +38,13 @@ func newBroker(t *testing.T, produce sarama.MockResponse) (*sarama.MockBroker, f
 
 	b := sarama.NewMockBroker(t, 1)
 	handlers := map[string]sarama.MockResponse{
-		"ApiVersionsRequest": sarama.NewMockApiVersionsResponse(t),
+		// Клиент отправляет только те запросы, которые брокер перечислил в ответе ApiVersions,
+		// а MockBroker по умолчанию перечисляет Produce и Fetch. Поэтому список задан явно:
+		// 0 - Produce (версии как в MockBroker по умолчанию), 3 - Metadata.
+		"ApiVersionsRequest": sarama.NewMockApiVersionsResponse(t).SetApiKeys([]sarama.ApiVersionsResponseKey{
+			{ApiKey: 0, MinVersion: 5, MaxVersion: 8},
+			{ApiKey: 3, MinVersion: 0, MaxVersion: 12},
+		}),
 		"MetadataRequest": sarama.NewMockMetadataResponse(t).
 			SetBroker(b.Addr(), b.BrokerID()).
 			SetLeader(topic, 0, b.BrokerID()),
