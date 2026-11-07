@@ -18,7 +18,7 @@ func New(env string) *slog.Logger {
 
 	switch env {
 	case envLocal:
-		handler = tint.NewHandler(os.Stdout, &tint.Options{
+		handler = tint.NewTextHandler(os.Stdout, &tint.Options{
 			Level:      slog.LevelDebug,
 			TimeFormat: "15:04:05.000",
 		})
