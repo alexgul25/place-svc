@@ -43,7 +43,7 @@ RUN --mount=type=cache,target=/go/pkg/mod \
 # Стадия health-probe: готовый образ с утилитой grpc_health_probe
 # ============================================================
 # Версия указана прямо в теге, а не через ARG: такой тег видит и обновляет Dependabot.
-FROM ghcr.io/grpc-ecosystem/grpc-health-probe:v0.4.38 AS health-probe
+FROM ghcr.io/grpc-ecosystem/grpc-health-probe:v0.4.61 AS health-probe
 
 # ============================================================
 # Стадия 2: runtime — минимальный образ с бинарниками
