@@ -37,7 +37,7 @@ body:
       placeholder: |
         - ОС: Ubuntu 22.04
         - Версия сервиса: 0.2.1
-        - Docker-образ: date-wishlist-hub/gateway:latest
+        - Docker-образ: namtuda/gateway:latest
     validations:
       required: false
   - type: textarea

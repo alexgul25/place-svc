@@ -164,7 +164,7 @@ docker-smoke: docker-build test-infra-up ## Проверить образ: ми�
 	@DB_PORT="$(TEST_DB_PORT)" DB_NAME=place_svc_test KAFKA_PRODUCER_BROKERS="localhost:$(TEST_KAFKA_PORT)" \
 		REDIS_CACHE_ADDR="localhost:$(TEST_REDIS_PORT)" bash scripts/docker-smoke.sh "$(SERVICE_NAME):local"
 
-# Один узел KRaft, как в date-wishlist-hub-deploy. Брокер слушает внутри контейнера тот же порт,
+# Один узел KRaft, как в namtuda. Брокер слушает внутри контейнера тот же порт,
 # что снаружи: адрес из метаданных (localhost:порт) подходит и тестам, и проверке готовности.
 # Топики не создаются при первом обращении: тесты создают их сами, как kafka-init при деплое.
 _test_kafka_up: _check_docker
