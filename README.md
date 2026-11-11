@@ -2,11 +2,11 @@
 
 [![CI](https://github.com/alexgul25/place-svc/actions/workflows/ci.yml/badge.svg)](https://github.com/alexgul25/place-svc/actions/workflows/ci.yml)
 
-Микросервис для проекта **Date Wishlist Hub**.
+Микросервис для проекта **НамТуда**.
 
-Ссылка на центральный репозиторий проекта: **[Date Wishlist Hub Deploy](https://github.com/alexgul25/date-wishlist-hub-deploy)**
+Ссылка на центральный репозиторий проекта: **[НамТуда](https://github.com/alexgul25/namtuda)**
 
-Ссылка на канбан-доску проекта: **[Date Wishlist Hub - Development](https://github.com/users/alexgul25/projects/2)**
+Ссылка на канбан-доску проекта: **[НамТуда - Разработка](https://github.com/users/alexgul25/projects/2)**
 
 *Стек технологий сервиса:* `Go`  `gRPC`  `PostgreSQL`  `Kafka`  `Redis`
 
@@ -20,7 +20,7 @@
 - В качестве брокера сообщений используется `Kafka`.
 - В качестве БД используется `PostgreSQL`.
 - В качесте кеша используется `Redis`.
-- Методы **не должны** быть доступны пользователям напрямую (см. [архитектуру проекта](https://github.com/alexgul25/date-wishlist-hub-deploy#building_construction-архитектура-проекта)).
+- Методы **не должны** быть доступны пользователям напрямую (см. [архитектуру проекта](https://github.com/alexgul25/namtuda#building_construction-архитектура-проекта)).
 
 ***Таблица gRPC-методов.***
 
@@ -82,7 +82,7 @@
 
 В данном разделе приведена инструкция по запуску одного **Place Service**. Сервис можно запустить двумя способами: собрать и запустить бинарник локально или запустить в Docker-контейнере.
 
-Инструкция по запуску всего проекта целиком доступна по **[ссылке](https://github.com/alexgul25/date-wishlist-hub-deploy#desktop_computer-локальный-запуск-и-работа-через-терминал)**.
+Инструкция по запуску всего проекта целиком доступна по **[ссылке](https://github.com/alexgul25/namtuda#desktop_computer-локальный-запуск-и-работа-через-терминал)**.
 
 ### 1. Подготовка окружения
 
